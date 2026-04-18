@@ -9,6 +9,7 @@ type Task = {
   title: string
   category: Category
   status: TabKey
+  timestamp: number
 }
 
 const STORAGE_KEY = 'mobile-kanban.tasks'
@@ -26,10 +27,88 @@ const categoryStyles: Record<Category, string> = {
 }
 
 const starterTasks: Task[] = [
-  { id: crypto.randomUUID(), title: 'Review tomorrow schedule', category: 'personal', status: 'todo' },
-  { id: crypto.randomUUID(), title: 'Finish invoice draft', category: 'work', status: 'doing' },
-  { id: crypto.randomUUID(), title: 'Pay electricity bill', category: 'urgent', status: 'done' },
+  { id: crypto.randomUUID(), title: 'Review tomorrow schedule', category: 'personal', status: 'todo', timestamp: Date.now() - 2 * 60 * 60 * 1000 },
+  { id: crypto.randomUUID(), title: 'Finish invoice draft', category: 'work', status: 'doing', timestamp: Date.now() - 6 * 60 * 60 * 1000 },
+  { id: crypto.randomUUID(), title: 'Pay electricity bill', category: 'urgent', status: 'done', timestamp: Date.now() - 28 * 60 * 60 * 1000 },
 ]
+
+export function getTaskAge(timestamp: number) {
+  return Math.floor((Date.now() - timestamp) / (1000 * 60 * 60))
+}
+
+function getTaskAgeStyles(timestamp: number) {
+  const ageInHours = getTaskAge(timestamp)
+
+  if (ageInHours > 24) {
+    return 'border-red-500 ring-1 ring-red-500/30'
+  }
+
+  if (ageInHours > 4) {
+    return 'border-amber-500 ring-1 ring-amber-500/20'
+  }
+
+  return 'border-slate-800'
+}
+
+function formatTaskAge(timestamp: number) {
+  const ageInHours = getTaskAge(timestamp)
+
+  if (ageInHours >= 24) {
+    return `${Math.floor(ageInHours / 24)}d`
+  }
+
+  return `${Math.max(0, ageInHours)}h`
+}
+
+type TaskCardProps = {
+  task: Task
+  onOpen: (taskId: string) => void
+  onMove: (taskId: string) => void
+  now: number
+}
+
+function TaskCard({ task, onOpen, onMove, now }: TaskCardProps) {
+  const ageClasses = useMemo(() => getTaskAgeStyles(task.timestamp), [task.timestamp, now])
+  const ageLabel = useMemo(() => formatTaskAge(task.timestamp), [task.timestamp, now])
+
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen(task.id)}
+      className={`relative w-full rounded-3xl border bg-slate-950/80 p-4 text-left transition active:scale-[0.99] ${ageClasses}`}
+    >
+      <span className="absolute right-4 top-4 rounded-full bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-slate-300 ring-1 ring-slate-700">
+        {ageLabel}
+      </span>
+
+      <div className="flex items-start justify-between gap-3 pr-14">
+        <div className="min-w-0 flex-1">
+          <p className="text-base font-medium leading-6 text-slate-100">{task.title}</p>
+          <span className={`mt-3 inline-flex min-h-8 items-center rounded-full px-3 text-xs font-medium capitalize ${categoryStyles[task.category]}`}>
+            {task.category}
+          </span>
+        </div>
+
+        {task.status !== 'done' ? (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation()
+              onMove(task.id)
+            }}
+            className="min-h-11 min-w-11 rounded-full bg-slate-800 px-4 text-sm font-medium text-slate-100 transition hover:bg-slate-700"
+          >
+            Move
+          </button>
+        ) : (
+          <div className="flex min-h-11 min-w-11 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-300">
+            <Check className="h-5 w-5" />
+          </div>
+        )}
+      </div>
+    </button>
+  )
+}
 
 function loadTasks(): Task[] {
   if (typeof window === 'undefined') {
@@ -42,8 +121,18 @@ function loadTasks(): Task[] {
   }
 
   try {
-    const parsed = JSON.parse(stored) as Task[]
-    return Array.isArray(parsed) ? parsed : starterTasks
+    const parsed = JSON.parse(stored) as Array<Partial<Task>>
+    if (!Array.isArray(parsed)) {
+      return starterTasks
+    }
+
+    return parsed.map((task) => ({
+      id: task.id ?? crypto.randomUUID(),
+      title: task.title ?? 'Untitled task',
+      category: (task.category as Category) ?? 'personal',
+      status: (task.status as TabKey) ?? 'todo',
+      timestamp: typeof task.timestamp === 'number' ? task.timestamp : Date.now(),
+    }))
   } catch {
     return starterTasks
   }
@@ -56,6 +145,7 @@ export default function App() {
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
   const [title, setTitle] = useState('')
   const [category, setCategory] = useState<Category>('personal')
+  const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
     document.documentElement.classList.add('dark')
@@ -64,6 +154,14 @@ export default function App() {
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks))
   }, [tasks])
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setNow(Date.now())
+    }, 60 * 1000)
+
+    return () => window.clearInterval(timer)
+  }, [])
 
   const visibleTasks = useMemo(() => tasks.filter((task) => task.status === activeTab), [activeTab, tasks])
   const editingTask = useMemo(() => tasks.find((task) => task.id === editingTaskId) ?? null, [editingTaskId, tasks])
@@ -107,7 +205,7 @@ export default function App() {
     if (editingTask) {
       setTasks((current) => current.map((task) => (task.id === editingTask.id ? { ...task, title: trimmedTitle, category } : task)))
     } else {
-      setTasks((current) => [{ id: crypto.randomUUID(), title: trimmedTitle, category, status: activeTab }, ...current])
+      setTasks((current) => [{ id: crypto.randomUUID(), title: trimmedTitle, category, status: activeTab, timestamp: Date.now() }, ...current])
     }
 
     closeComposer()
@@ -126,11 +224,11 @@ export default function App() {
         }
 
         if (task.status === 'todo') {
-          return { ...task, status: 'doing' }
+          return { ...task, status: 'doing', timestamp: Date.now() }
         }
 
         if (task.status === 'doing') {
-          return { ...task, status: 'done' }
+          return { ...task, status: 'done', timestamp: Date.now() }
         }
 
         return task
@@ -158,38 +256,13 @@ export default function App() {
           <div className="flex-1 space-y-3 overflow-y-auto pr-1">
             {visibleTasks.length > 0 ? (
               visibleTasks.map((task) => (
-                <button
+                <TaskCard
                   key={task.id}
-                  type="button"
-                  onClick={() => openEditModal(task.id)}
-                  className="w-full rounded-3xl border border-slate-800 bg-slate-950/80 p-4 text-left transition active:scale-[0.99]"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-base font-medium leading-6 text-slate-100">{task.title}</p>
-                      <span className={`mt-3 inline-flex min-h-8 items-center rounded-full px-3 text-xs font-medium capitalize ${categoryStyles[task.category]}`}>
-                        {task.category}
-                      </span>
-                    </div>
-
-                    {task.status !== 'done' ? (
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          moveTaskForward(task.id)
-                        }}
-                        className="min-h-11 min-w-11 rounded-full bg-slate-800 px-4 text-sm font-medium text-slate-100 transition hover:bg-slate-700"
-                      >
-                        Move
-                      </button>
-                    ) : (
-                      <div className="flex min-h-11 min-w-11 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-300">
-                        <Check className="h-5 w-5" />
-                      </div>
-                    )}
-                  </div>
-                </button>
+                  task={task}
+                  now={now}
+                  onOpen={openEditModal}
+                  onMove={moveTaskForward}
+                />
               ))
             ) : (
               <div className="flex h-full min-h-56 items-center justify-center rounded-3xl border border-dashed border-slate-800 bg-slate-950/50 px-6 text-center text-sm leading-6 text-slate-500">
