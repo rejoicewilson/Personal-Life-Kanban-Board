@@ -1,22 +1,11 @@
 import { categoryLabels, columnLabels, priorityLabels } from '@/utils/constants'
 import type { TaskCategory, TaskPriority, TaskStatus } from '@/types/task'
 
-export function formatDate(date?: string) {
-  if (!date) {
-    return 'No due date'
-  }
-
+export function formatDate(date: string) {
   return new Intl.DateTimeFormat(undefined, {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
-  }).format(new Date(date))
-}
-
-export function formatRelativeDate(date: string) {
-  return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: 'numeric',
   }).format(new Date(date))
 }
 
@@ -33,14 +22,11 @@ export function getStatusLabel(status: TaskStatus) {
 }
 
 export function getCategoryVariant(category: TaskCategory) {
-  const variants: Record<TaskCategory, 'success' | 'info' | 'violet' | 'warning' | 'danger' | 'default'> = {
+  const variants: Record<TaskCategory, 'success' | 'info' | 'violet' | 'default'> = {
     health: 'success',
     career: 'info',
     learning: 'violet',
-    finance: 'warning',
-    family: 'danger',
-    spiritual: 'default',
-    personal: 'info',
+    personal: 'default',
   }
 
   return variants[category]

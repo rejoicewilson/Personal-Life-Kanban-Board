@@ -1,11 +1,11 @@
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { CalendarDays, GripVertical } from 'lucide-react'
+import { GripVertical } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 import { cn } from '@/utils/cn'
 import type { Task } from '@/types/task'
-import { formatRelativeDate, getCategoryLabel, getCategoryVariant, getPriorityLabel, getPriorityVariant } from '@/utils/task'
+import { getCategoryLabel, getCategoryVariant, getPriorityLabel, getPriorityVariant } from '@/utils/task'
 
 type BoardTaskCardProps = {
   task: Task
@@ -43,19 +43,11 @@ export function BoardTaskCard({ task, overlay = false, onClick }: BoardTaskCardP
         </button>
 
         <div className="min-w-0 flex-1 space-y-3">
-          <div className="space-y-1">
-            <h4 className="line-clamp-2 text-[15px] font-semibold leading-5 text-foreground">{task.title}</h4>
-            {task.description ? <p className="line-clamp-2 text-sm leading-5 text-muted-foreground">{task.description}</p> : null}
-          </div>
+          <h4 className="line-clamp-2 text-[15px] font-semibold leading-5 text-foreground">{task.title}</h4>
 
           <div className="flex flex-wrap gap-2">
             <Badge variant={getCategoryVariant(task.category)}>{getCategoryLabel(task.category)}</Badge>
             <Badge variant={getPriorityVariant(task.priority)}>{getPriorityLabel(task.priority)}</Badge>
-          </div>
-
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <CalendarDays className="h-3.5 w-3.5" />
-            <span>{task.dueDate ? formatRelativeDate(task.dueDate) : 'No due date'}</span>
           </div>
         </div>
       </div>

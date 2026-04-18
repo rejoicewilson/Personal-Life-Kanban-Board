@@ -63,6 +63,13 @@
     @apply border-border;
   }
 
+  html,
+  body,
+  #app {
+    height: 100%;
+    overflow: hidden;
+  }
+
   body {
     @apply bg-background text-foreground antialiased;
     background-image:

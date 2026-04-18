@@ -1,19 +1,16 @@
 import { NavLink } from 'react-router-dom'
-import { ChartColumn, KanbanSquare, Repeat, Settings, Target } from 'lucide-react'
+import { ChartColumn, KanbanSquare } from 'lucide-react'
 import { cn } from '@/utils/cn'
 
 const items = [
   { to: '/board', label: 'Board', icon: KanbanSquare },
   { to: '/', label: 'Dashboard', icon: ChartColumn },
-  { to: '/goals', label: 'Goals', icon: Target },
-  { to: '/habits', label: 'Habits', icon: Repeat },
-  { to: '/settings', label: 'Settings', icon: Settings },
 ]
 
 export function BottomNav() {
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border/70 bg-background/95 px-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-2 backdrop-blur xl:hidden">
-      <div className="grid grid-cols-5 gap-1">
+      <div className="grid grid-cols-2 gap-2">
         {items.map((item) => {
           const Icon = item.icon
           return (

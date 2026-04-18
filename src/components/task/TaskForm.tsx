@@ -7,15 +7,12 @@ import { taskSchema, type TaskFormValues } from '@/components/task/taskSchema'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Textarea } from '@/components/ui/textarea'
 
 const emptyValues: TaskFormValues = {
   title: '',
-  description: '',
   status: 'backlog',
   category: 'personal',
   priority: 'medium',
-  dueDate: '',
 }
 
 type TaskFormProps = {
@@ -32,11 +29,9 @@ export function TaskForm({ task, initialStatus = 'backlog', onSubmit, onDelete, 
     defaultValues: task
       ? {
           title: task.title,
-          description: task.description ?? '',
           status: task.status,
           category: task.category,
           priority: task.priority,
-          dueDate: task.dueDate ? task.dueDate.slice(0, 10) : '',
         }
       : { ...emptyValues, status: initialStatus },
   })
@@ -46,11 +41,9 @@ export function TaskForm({ task, initialStatus = 'backlog', onSubmit, onDelete, 
       task
         ? {
             title: task.title,
-            description: task.description ?? '',
             status: task.status,
             category: task.category,
             priority: task.priority,
-            dueDate: task.dueDate ? task.dueDate.slice(0, 10) : '',
           }
         : { ...emptyValues, status: initialStatus },
     )
@@ -62,21 +55,15 @@ export function TaskForm({ task, initialStatus = 'backlog', onSubmit, onDelete, 
     <form className="space-y-5" onSubmit={handleSubmit(onSubmit)}>
       <div className="space-y-2">
         <label className="text-sm font-medium">Title</label>
-        <Input placeholder="Morning workout, budget review..." {...register('title')} />
+        <Input className="h-12" placeholder="Morning walk, read 15 pages..." {...register('title')} />
         {errors.title ? <p className="text-sm text-rose-500">{errors.title.message}</p> : null}
-      </div>
-
-      <div className="space-y-2">
-        <label className="text-sm font-medium">Description</label>
-        <Textarea placeholder="Add context, why it matters, or the next step." {...register('description')} />
-        {errors.description ? <p className="text-sm text-rose-500">{errors.description.message}</p> : null}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <label className="text-sm font-medium">Status</label>
           <Select value={watch('status')} onValueChange={(value) => setValue('status', value as TaskFormValues['status'])}>
-            <SelectTrigger><SelectValue placeholder="Choose status" /></SelectTrigger>
+            <SelectTrigger className="h-12"><SelectValue placeholder="Choose status" /></SelectTrigger>
             <SelectContent>
               {Object.entries(columnLabels).map(([value, label]) => (
                 <SelectItem key={value} value={value}>{label}</SelectItem>
@@ -88,7 +75,7 @@ export function TaskForm({ task, initialStatus = 'backlog', onSubmit, onDelete, 
         <div className="space-y-2">
           <label className="text-sm font-medium">Category</label>
           <Select value={watch('category')} onValueChange={(value) => setValue('category', value as TaskFormValues['category'])}>
-            <SelectTrigger><SelectValue placeholder="Choose category" /></SelectTrigger>
+            <SelectTrigger className="h-12"><SelectValue placeholder="Choose category" /></SelectTrigger>
             <SelectContent>
               {Object.entries(categoryLabels).map(([value, label]) => (
                 <SelectItem key={value} value={value}>{label}</SelectItem>
@@ -100,18 +87,13 @@ export function TaskForm({ task, initialStatus = 'backlog', onSubmit, onDelete, 
         <div className="space-y-2">
           <label className="text-sm font-medium">Priority</label>
           <Select value={watch('priority')} onValueChange={(value) => setValue('priority', value as TaskFormValues['priority'])}>
-            <SelectTrigger><SelectValue placeholder="Choose priority" /></SelectTrigger>
+            <SelectTrigger className="h-12"><SelectValue placeholder="Choose priority" /></SelectTrigger>
             <SelectContent>
               {Object.entries(priorityLabels).map(([value, label]) => (
                 <SelectItem key={value} value={value}>{label}</SelectItem>
               ))}
             </SelectContent>
           </Select>
-        </div>
-
-        <div className="space-y-2">
-          <label className="text-sm font-medium">Due date</label>
-          <Input type="date" {...register('dueDate')} />
         </div>
       </div>
 

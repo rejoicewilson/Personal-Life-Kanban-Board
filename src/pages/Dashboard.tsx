@@ -6,9 +6,6 @@ import { categoryLabels, columnLabels } from '@/utils/constants'
 export function DashboardPage() {
   const tasks = useTaskStore((state) => state.tasks)
   const total = tasks.length
-  const overdue = tasks.filter(
-    (task) => task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'done',
-  ).length
 
   const categoryCounts = Object.entries(categoryLabels).map(([key, label]) => ({
     label,
@@ -27,7 +24,7 @@ export function DashboardPage() {
           { label: 'Total tasks', value: total, icon: Layers3 },
           { label: 'Completed', value: tasks.filter((task) => task.status === 'done').length, icon: CheckCircle2 },
           { label: 'In progress', value: tasks.filter((task) => task.status === 'in_progress').length, icon: Activity },
-          { label: 'Overdue', value: overdue, icon: Clock3 },
+          { label: 'Today', value: tasks.filter((task) => task.status === 'today').length, icon: Clock3 },
         ].map((item) => {
           const Icon = item.icon
           return (

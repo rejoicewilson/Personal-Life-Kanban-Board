@@ -15,11 +15,7 @@ type TaskDialogProps = {
 }
 
 function normalize(values: TaskFormValues) {
-  return {
-    ...values,
-    description: values.description || undefined,
-    dueDate: values.dueDate ? new Date(values.dueDate).toISOString() : undefined,
-  }
+  return values
 }
 
 export function TaskDialog({ open, onOpenChange, taskId, initialStatus = 'backlog' }: TaskDialogProps) {
@@ -48,7 +44,6 @@ export function TaskDialog({ open, onOpenChange, taskId, initialStatus = 'backlo
             <Badge variant={getPriorityVariant(task.priority)}>{getPriorityLabel(task.priority)}</Badge>
             <Badge variant="outline">{getStatusLabel(task.status)}</Badge>
             <Badge variant="outline">Created {formatDate(task.createdAt)}</Badge>
-            <Badge variant="outline">Due {formatDate(task.dueDate)}</Badge>
           </div>
         ) : null}
 

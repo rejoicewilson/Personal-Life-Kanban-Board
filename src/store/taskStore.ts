@@ -1,23 +1,15 @@
 import { create } from 'zustand'
-import type { Task, TaskCategory, TaskInput, TaskPriority, TaskStatus } from '@/types/task'
+import type { Task, TaskInput, TaskStatus } from '@/types/task'
 import { loadTasks, loadTheme, saveTasks, saveTheme } from '@/utils/storage'
 import { columnOrder } from '@/utils/constants'
 
 type Theme = 'light' | 'dark'
-type CategoryFilter = TaskCategory | 'all'
-type PriorityFilter = TaskPriority | 'all'
 
 type TaskStore = {
   tasks: Task[]
   theme: Theme
   query: string
-  focusMode: boolean
-  categoryFilter: CategoryFilter
-  priorityFilter: PriorityFilter
   setQuery: (query: string) => void
-  setCategoryFilter: (category: CategoryFilter) => void
-  setPriorityFilter: (priority: PriorityFilter) => void
-  clearFilters: () => void
   createTask: (input: TaskInput) => void
   updateTask: (id: string, input: TaskInput) => void
   deleteTask: (id: string) => void
@@ -25,7 +17,6 @@ type TaskStore = {
   moveTaskToColumn: (taskId: string, status: TaskStatus) => void
   toggleTheme: () => void
   setTheme: (theme: Theme) => void
-  toggleFocusMode: () => void
 }
 
 function insertTask(tasks: Task[], activeId: string, overId: string, overStatus: TaskStatus) {
@@ -63,13 +54,7 @@ export const useTaskStore = create<TaskStore>((set) => ({
   tasks: loadTasks(),
   theme: loadTheme(),
   query: '',
-  focusMode: false,
-  categoryFilter: 'all',
-  priorityFilter: 'all',
   setQuery: (query) => set({ query }),
-  setCategoryFilter: (categoryFilter) => set({ categoryFilter }),
-  setPriorityFilter: (priorityFilter) => set({ priorityFilter }),
-  clearFilters: () => set({ categoryFilter: 'all', priorityFilter: 'all' }),
   createTask: (input) =>
     set((state) => {
       const tasks = [{ id: crypto.randomUUID(), createdAt: new Date().toISOString(), ...input }, ...state.tasks]
@@ -110,5 +95,4 @@ export const useTaskStore = create<TaskStore>((set) => ({
     saveTheme(theme)
     set({ theme })
   },
-  toggleFocusMode: () => set((state) => ({ focusMode: !state.focusMode })),
 }))

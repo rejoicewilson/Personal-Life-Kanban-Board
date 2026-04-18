@@ -27,9 +27,6 @@ type KanbanBoardProps = {
 export function KanbanBoard({ defaultStatus = 'backlog' }: KanbanBoardProps) {
   const tasks = useTaskStore((state) => state.tasks)
   const query = useTaskStore((state) => state.query)
-  const focusMode = useTaskStore((state) => state.focusMode)
-  const categoryFilter = useTaskStore((state) => state.categoryFilter)
-  const priorityFilter = useTaskStore((state) => state.priorityFilter)
   const moveTask = useTaskStore((state) => state.moveTask)
   const moveTaskToColumn = useTaskStore((state) => state.moveTaskToColumn)
   const [activeTask, setActiveTask] = useState<Task | null>(null)
@@ -48,29 +45,15 @@ export function KanbanBoard({ defaultStatus = 'backlog' }: KanbanBoardProps) {
     () =>
       tasks.filter((task) => {
         const matchesQuery =
-          normalizedQuery.length === 0 ||
-          task.title.toLowerCase().includes(normalizedQuery) ||
-          task.description?.toLowerCase().includes(normalizedQuery)
+          normalizedQuery.length === 0 || task.title.toLowerCase().includes(normalizedQuery)
 
         if (!matchesQuery) {
           return false
         }
 
-        if (categoryFilter !== 'all' && task.category !== categoryFilter) {
-          return false
-        }
-
-        if (priorityFilter !== 'all' && task.priority !== priorityFilter) {
-          return false
-        }
-
-        if (!focusMode) {
-          return true
-        }
-
-        return task.status === 'today' || task.status === 'in_progress'
+        return true
       }),
-    [categoryFilter, focusMode, normalizedQuery, priorityFilter, tasks],
+    [normalizedQuery, tasks],
   )
 
   const tasksByStatus = useMemo(
@@ -127,18 +110,16 @@ export function KanbanBoard({ defaultStatus = 'backlog' }: KanbanBoardProps) {
         onDragEnd={handleDragEnd}
         onDragCancel={() => setActiveTask(null)}
       >
-        <div className="-mx-1 flex snap-x snap-mandatory gap-4 overflow-x-auto px-1 pb-2 xl:mx-0 xl:grid xl:grid-cols-5 xl:overflow-visible xl:px-0">
-          {columnOrder
-            .filter((status) => !focusMode || status === 'today' || status === 'in_progress')
-            .map((status) => (
-              <BoardColumn
-                key={status}
-                status={status}
-                tasks={tasksByStatus[status]}
-                onAddTask={openNewTask}
-                onSelectTask={setEditingTaskId}
-              />
-            ))}
+        <div className="-mx-1 flex snap-x snap-mandatory gap-4 overflow-x-auto px-1 pb-2 xl:mx-0 xl:grid xl:grid-cols-4 xl:overflow-visible xl:px-0">
+          {columnOrder.map((status) => (
+            <BoardColumn
+              key={status}
+              status={status}
+              tasks={tasksByStatus[status]}
+              onAddTask={openNewTask}
+              onSelectTask={setEditingTaskId}
+            />
+          ))}
         </div>
 
         <DragOverlay>{activeTask ? <BoardTaskCard task={activeTask} overlay /> : null}</DragOverlay>
