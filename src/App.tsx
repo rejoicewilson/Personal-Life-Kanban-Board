@@ -2,19 +2,32 @@ import { useEffect, useMemo, useState } from 'react'
 import { Bell, BellRing, Check, Clipboard, Play, Plus, X } from 'lucide-react'
 
 type TabKey = 'todo' | 'doing' | 'done'
-type Category = 'work' | 'personal' | 'urgent'
+type CategoryColor = 'sky' | 'violet' | 'rose' | 'emerald' | 'amber' | 'cyan'
+
+type Category = {
+  id: string
+  name: string
+  color: CategoryColor
+}
 
 type Task = {
   id: string
   title: string
-  category: Category
+  categoryId: string
   status: TabKey
   timestamp: number
   dueDate?: number
   reminderSentAt?: number
+  note?: string
+  subtasks: Array<{
+    id: string
+    text: string
+    done: boolean
+  }>
 }
 
 const STORAGE_KEY = 'mobile-kanban.tasks'
+const CATEGORY_STORAGE_KEY = 'mobile-kanban.categories'
 
 const tabs: Array<{ key: TabKey; label: string; icon: typeof Clipboard }> = [
   { key: 'todo', label: 'To Do', icon: Clipboard },
@@ -22,39 +35,101 @@ const tabs: Array<{ key: TabKey; label: string; icon: typeof Clipboard }> = [
   { key: 'done', label: 'Done', icon: Check },
 ]
 
-const categoryStyles: Record<Category, string> = {
-  work: 'bg-sky-500/15 text-sky-300 ring-1 ring-sky-400/20',
-  personal: 'bg-violet-500/15 text-violet-300 ring-1 ring-violet-400/20',
-  urgent: 'bg-rose-500/15 text-rose-300 ring-1 ring-rose-400/20',
+const categoryStyles: Record<CategoryColor, string> = {
+  sky: 'bg-sky-500/15 text-sky-300 ring-1 ring-sky-400/20',
+  violet: 'bg-violet-500/15 text-violet-300 ring-1 ring-violet-400/20',
+  rose: 'bg-rose-500/15 text-rose-300 ring-1 ring-rose-400/20',
+  emerald: 'bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-400/20',
+  amber: 'bg-amber-500/15 text-amber-300 ring-1 ring-amber-400/20',
+  cyan: 'bg-cyan-500/15 text-cyan-300 ring-1 ring-cyan-400/20',
 }
+
+const defaultCategories: Category[] = [
+  { id: 'work', name: 'Work', color: 'sky' },
+  { id: 'personal', name: 'Personal', color: 'violet' },
+  { id: 'urgent', name: 'Urgent', color: 'rose' },
+]
 
 const starterTasks: Task[] = [
   {
     id: crypto.randomUUID(),
     title: 'Review tomorrow schedule',
-    category: 'personal',
+    categoryId: 'personal',
     status: 'todo',
     timestamp: Date.now() - 2 * 60 * 60 * 1000,
     dueDate: Date.now() + 2 * 60 * 60 * 1000,
+    note: 'Keep it light and make room for gym time.',
+    subtasks: [
+      { id: crypto.randomUUID(), text: 'Check calendar', done: true },
+      { id: crypto.randomUUID(), text: 'Block workout slot', done: false },
+    ],
   },
   {
     id: crypto.randomUUID(),
     title: 'Finish invoice draft',
-    category: 'work',
+    categoryId: 'work',
     status: 'doing',
     timestamp: Date.now() - 6 * 60 * 60 * 1000,
     dueDate: Date.now() + 45 * 60 * 1000,
+    note: 'Send before lunch if possible.',
+    subtasks: [
+      { id: crypto.randomUUID(), text: 'Verify billable hours', done: true },
+      { id: crypto.randomUUID(), text: 'Attach PDF summary', done: false },
+    ],
   },
   {
     id: crypto.randomUUID(),
     title: 'Pay electricity bill',
-    category: 'urgent',
+    categoryId: 'urgent',
     status: 'done',
     timestamp: Date.now() - 28 * 60 * 60 * 1000,
     dueDate: Date.now() - 4 * 60 * 60 * 1000,
     reminderSentAt: Date.now() - 4 * 60 * 60 * 1000,
+    note: 'Paid through the banking app.',
+    subtasks: [{ id: crypto.randomUUID(), text: 'Save receipt screenshot', done: true }],
   },
 ]
+
+function slugifyCategoryName(name: string) {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
+function loadCategories(): Category[] {
+  if (typeof window === 'undefined') {
+    return defaultCategories
+  }
+
+  const stored = window.localStorage.getItem(CATEGORY_STORAGE_KEY)
+  if (!stored) {
+    return defaultCategories
+  }
+
+  try {
+    const parsed = JSON.parse(stored) as Array<Partial<Category>>
+    if (!Array.isArray(parsed)) {
+      return defaultCategories
+    }
+
+    const categories = parsed
+      .filter((item) => typeof item === 'object' && item !== null)
+      .map((item) => ({
+        id: typeof item.id === 'string' && item.id.trim() ? item.id : crypto.randomUUID(),
+        name: typeof item.name === 'string' && item.name.trim() ? item.name.trim() : 'Custom',
+        color:
+          typeof item.color === 'string' && item.color in categoryStyles
+            ? (item.color as CategoryColor)
+            : 'sky',
+      }))
+
+    return categories.length > 0 ? categories : defaultCategories
+  } catch {
+    return defaultCategories
+  }
+}
 
 export function getTaskAge(timestamp: number) {
   return Math.floor((Date.now() - timestamp) / (1000 * 60 * 60))
@@ -143,18 +218,33 @@ async function sendReminderNotification(task: Task) {
   }
 }
 
+function resolveCategory(
+  categories: Category[],
+  categoryId: string,
+): Category {
+  return (
+    categories.find((category) => category.id === categoryId) ?? {
+      id: categoryId,
+      name: 'Uncategorized',
+      color: 'sky',
+    }
+  )
+}
+
 type TaskCardProps = {
   task: Task
+  category: Category
   onOpen: (taskId: string) => void
   onMove: (taskId: string) => void
   now: number
 }
 
-function TaskCard({ task, onOpen, onMove, now }: TaskCardProps) {
+function TaskCard({ task, category, onOpen, onMove, now }: TaskCardProps) {
   const ageClasses = useMemo(() => getTaskAgeStyles(task.timestamp), [task.timestamp, now])
   const ageLabel = useMemo(() => formatTaskAge(task.timestamp), [task.timestamp, now])
   const dueLabel = useMemo(() => formatDueDate(task.dueDate), [task.dueDate])
   const overdue = Boolean(task.dueDate && task.status !== 'done' && now >= task.dueDate)
+  const completedSubtasks = task.subtasks.filter((subtask) => subtask.done).length
 
   return (
     <button
@@ -169,9 +259,12 @@ function TaskCard({ task, onOpen, onMove, now }: TaskCardProps) {
       <div className="flex items-start justify-between gap-3 pr-14">
         <div className="min-w-0 flex-1">
           <p className="text-base font-medium leading-6 text-slate-100">{task.title}</p>
+          {task.note ? (
+            <p className="mt-2 line-clamp-2 text-sm leading-5 text-slate-400">{task.note}</p>
+          ) : null}
           <div className="mt-3 flex flex-wrap gap-2">
-            <span className={`inline-flex min-h-8 items-center rounded-full px-3 text-xs font-medium capitalize ${categoryStyles[task.category]}`}>
-              {task.category}
+            <span className={`inline-flex min-h-8 items-center rounded-full px-3 text-xs font-medium ${categoryStyles[category.color]}`}>
+              {category.name}
             </span>
             {dueLabel ? (
               <span
@@ -182,6 +275,11 @@ function TaskCard({ task, onOpen, onMove, now }: TaskCardProps) {
                 }`}
               >
                 Due {dueLabel}
+              </span>
+            ) : null}
+            {task.subtasks.length > 0 ? (
+              <span className="inline-flex min-h-8 items-center rounded-full bg-slate-900 px-3 text-xs font-medium text-slate-300 ring-1 ring-slate-700">
+                {completedSubtasks}/{task.subtasks.length} checklist
               </span>
             ) : null}
           </div>
@@ -227,12 +325,34 @@ function loadTasks(): Task[] {
     return parsed.map((task) => ({
       id: task.id ?? crypto.randomUUID(),
       title: task.title ?? 'Untitled task',
-      category: (task.category as Category) ?? 'personal',
+      categoryId:
+        typeof task.categoryId === 'string'
+          ? task.categoryId
+          : typeof (task as { category?: string }).category === 'string'
+            ? (task as { category?: string }).category!
+            : 'personal',
       status: (task.status as TabKey) ?? 'todo',
       timestamp: typeof task.timestamp === 'number' ? task.timestamp : Date.now(),
       dueDate: typeof task.dueDate === 'number' ? task.dueDate : undefined,
       reminderSentAt:
         typeof task.reminderSentAt === 'number' ? task.reminderSentAt : undefined,
+      note: typeof task.note === 'string' ? task.note : undefined,
+      subtasks: Array.isArray(task.subtasks)
+        ? task.subtasks
+            .filter((subtask) => typeof subtask === 'object' && subtask !== null)
+            .map((subtask) => ({
+              id:
+                'id' in subtask && typeof subtask.id === 'string'
+                  ? subtask.id
+                  : crypto.randomUUID(),
+              text:
+                'text' in subtask && typeof subtask.text === 'string'
+                  ? subtask.text
+                  : '',
+              done: 'done' in subtask ? Boolean(subtask.done) : false,
+            }))
+            .filter((subtask) => subtask.text.trim().length > 0)
+        : [],
     }))
   } catch {
     return starterTasks
@@ -241,12 +361,18 @@ function loadTasks(): Task[] {
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabKey>('todo')
+  const [categories, setCategories] = useState<Category[]>(() => loadCategories())
   const [tasks, setTasks] = useState<Task[]>(() => loadTasks())
   const [isComposerOpen, setIsComposerOpen] = useState(false)
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
   const [title, setTitle] = useState('')
-  const [category, setCategory] = useState<Category>('personal')
+  const [categoryId, setCategoryId] = useState<string>('personal')
+  const [newCategoryName, setNewCategoryName] = useState('')
+  const [newCategoryColor, setNewCategoryColor] = useState<CategoryColor>('sky')
   const [dueDateInput, setDueDateInput] = useState('')
+  const [note, setNote] = useState('')
+  const [subtasks, setSubtasks] = useState<Array<{ id: string; text: string; done: boolean }>>([])
+  const [subtaskInput, setSubtaskInput] = useState('')
   const [now, setNow] = useState(() => Date.now())
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | 'unsupported'>(
     typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'unsupported',
@@ -259,6 +385,10 @@ export default function App() {
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks))
   }, [tasks])
+
+  useEffect(() => {
+    window.localStorage.setItem(CATEGORY_STORAGE_KEY, JSON.stringify(categories))
+  }, [categories])
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -315,21 +445,36 @@ export default function App() {
   useEffect(() => {
     if (!editingTask) {
       setTitle('')
-      setCategory('personal')
+      setCategoryId(categories[0]?.id ?? 'personal')
+      setNewCategoryName('')
+      setNewCategoryColor('sky')
       setDueDateInput('')
+      setNote('')
+      setSubtasks([])
+      setSubtaskInput('')
       return
     }
 
     setTitle(editingTask.title)
-    setCategory(editingTask.category)
+    setCategoryId(editingTask.categoryId)
+    setNewCategoryName('')
+    setNewCategoryColor('sky')
     setDueDateInput(formatDueDateInput(editingTask.dueDate))
-  }, [editingTask])
+    setNote(editingTask.note ?? '')
+    setSubtasks(editingTask.subtasks)
+    setSubtaskInput('')
+  }, [categories, editingTask])
 
   function openCreateModal() {
     setEditingTaskId(null)
     setTitle('')
-    setCategory('personal')
+    setCategoryId(categories[0]?.id ?? 'personal')
+    setNewCategoryName('')
+    setNewCategoryColor('sky')
     setDueDateInput('')
+    setNote('')
+    setSubtasks([])
+    setSubtaskInput('')
     setIsComposerOpen(true)
   }
 
@@ -342,8 +487,40 @@ export default function App() {
     setIsComposerOpen(false)
     setEditingTaskId(null)
     setTitle('')
-    setCategory('personal')
+    setCategoryId(categories[0]?.id ?? 'personal')
+    setNewCategoryName('')
+    setNewCategoryColor('sky')
     setDueDateInput('')
+    setNote('')
+    setSubtasks([])
+    setSubtaskInput('')
+  }
+
+  function createCategory() {
+    const trimmedName = newCategoryName.trim()
+    if (!trimmedName) {
+      return
+    }
+
+    const baseId = slugifyCategoryName(trimmedName) || crypto.randomUUID()
+    const existingIds = new Set(categories.map((item) => item.id))
+    let nextId = baseId
+    let counter = 2
+    while (existingIds.has(nextId)) {
+      nextId = `${baseId}-${counter}`
+      counter += 1
+    }
+
+    const category: Category = {
+      id: nextId,
+      name: trimmedName,
+      color: newCategoryColor,
+    }
+
+    setCategories((current) => [...current, category])
+    setCategoryId(category.id)
+    setNewCategoryName('')
+    setNewCategoryColor('sky')
   }
 
   async function requestNotificationPermission() {
@@ -359,6 +536,10 @@ export default function App() {
   function handleSaveTask() {
     const trimmedTitle = title.trim()
     const parsedDueDate = parseDueDateInput(dueDateInput)
+    const cleanedNote = note.trim()
+    const cleanedSubtasks = subtasks
+      .map((subtask) => ({ ...subtask, text: subtask.text.trim() }))
+      .filter((subtask) => subtask.text.length > 0)
     if (!trimmedTitle) {
       return
     }
@@ -370,8 +551,10 @@ export default function App() {
             ? {
                 ...task,
                 title: trimmedTitle,
-                category,
+                categoryId,
                 dueDate: parsedDueDate,
+                note: cleanedNote || undefined,
+                subtasks: cleanedSubtasks,
                 reminderSentAt:
                   parsedDueDate && parsedDueDate <= Date.now() ? task.reminderSentAt : undefined,
               }
@@ -383,10 +566,12 @@ export default function App() {
         {
           id: crypto.randomUUID(),
           title: trimmedTitle,
-          category,
+          categoryId,
           status: activeTab,
           timestamp: Date.now(),
           dueDate: parsedDueDate,
+          note: cleanedNote || undefined,
+          subtasks: cleanedSubtasks,
         },
         ...current,
       ])
@@ -398,6 +583,31 @@ export default function App() {
   function handleDeleteTask(taskId: string) {
     setTasks((current) => current.filter((task) => task.id !== taskId))
     closeComposer()
+  }
+
+  function addSubtask() {
+    const trimmed = subtaskInput.trim()
+    if (!trimmed) {
+      return
+    }
+
+    setSubtasks((current) => [
+      ...current,
+      { id: crypto.randomUUID(), text: trimmed, done: false },
+    ])
+    setSubtaskInput('')
+  }
+
+  function toggleSubtask(id: string) {
+    setSubtasks((current) =>
+      current.map((subtask) =>
+        subtask.id === id ? { ...subtask, done: !subtask.done } : subtask,
+      ),
+    )
+  }
+
+  function removeSubtask(id: string) {
+    setSubtasks((current) => current.filter((subtask) => subtask.id !== id))
   }
 
   function moveTaskForward(taskId: string) {
@@ -465,6 +675,7 @@ export default function App() {
                 <TaskCard
                   key={task.id}
                   task={task}
+                  category={resolveCategory(categories, task.categoryId)}
                   now={now}
                   onOpen={openEditModal}
                   onMove={moveTaskForward}
@@ -538,17 +749,56 @@ export default function App() {
 
               <div>
                 <label className="mb-2 block text-sm font-medium text-slate-300">Category</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {(['work', 'personal', 'urgent'] as Category[]).map((option) => (
+                <div className="grid grid-cols-2 gap-2">
+                  {categories.map((option) => (
                     <button
-                      key={option}
+                      key={option.id}
                       type="button"
-                      onClick={() => setCategory(option)}
-                      className={`min-h-12 rounded-2xl px-3 text-sm font-medium capitalize transition ${category === option ? 'bg-slate-100 text-slate-950' : 'bg-slate-800 text-slate-300'}`}
+                      onClick={() => setCategoryId(option.id)}
+                      className={`min-h-12 rounded-2xl px-3 text-sm font-medium transition ${
+                        categoryId === option.id ? 'bg-slate-100 text-slate-950' : 'bg-slate-800 text-slate-300'
+                      }`}
                     >
-                      {option}
+                      <span className={`inline-flex min-h-7 items-center rounded-full px-2.5 text-xs ${categoryStyles[option.color]}`}>
+                        {option.name}
+                      </span>
                     </button>
                   ))}
+                </div>
+
+                <div className="mt-3 rounded-2xl border border-slate-800 bg-slate-950 p-3">
+                  <p className="mb-3 text-xs font-medium uppercase tracking-[0.2em] text-slate-500">
+                    New category
+                  </p>
+                  <div className="space-y-3">
+                    <input
+                      value={newCategoryName}
+                      onChange={(event) => setNewCategoryName(event.target.value)}
+                      placeholder="Category name"
+                      className="min-h-12 w-full rounded-2xl border border-slate-800 bg-slate-900 px-4 text-base text-slate-100 outline-none placeholder:text-slate-500"
+                    />
+                    <div className="grid grid-cols-3 gap-2">
+                      {(['sky', 'violet', 'rose', 'emerald', 'amber', 'cyan'] as CategoryColor[]).map((color) => (
+                        <button
+                          key={color}
+                          type="button"
+                          onClick={() => setNewCategoryColor(color)}
+                          className={`min-h-11 rounded-2xl px-3 text-xs font-medium capitalize transition ${
+                            newCategoryColor === color ? 'ring-2 ring-slate-100' : 'ring-1 ring-slate-800'
+                          } ${categoryStyles[color]}`}
+                        >
+                          {color}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={createCategory}
+                      className="min-h-11 w-full rounded-2xl bg-slate-800 px-4 text-sm font-medium text-slate-100"
+                    >
+                      Add category
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -560,6 +810,79 @@ export default function App() {
                   onChange={(event) => setDueDateInput(event.target.value)}
                   className="min-h-12 w-full rounded-2xl border border-slate-800 bg-slate-950 px-4 text-base text-slate-100 outline-none"
                 />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-300">Notes</label>
+                <textarea
+                  value={note}
+                  onChange={(event) => setNote(event.target.value)}
+                  placeholder="Add a short note"
+                  rows={3}
+                  className="w-full rounded-2xl border border-slate-800 bg-slate-950 px-4 py-3 text-base text-slate-100 outline-none placeholder:text-slate-500"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-300">Checklist</label>
+                <div className="flex gap-2">
+                  <input
+                    value={subtaskInput}
+                    onChange={(event) => setSubtaskInput(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault()
+                        addSubtask()
+                      }
+                    }}
+                    placeholder="Add a subtask"
+                    className="min-h-12 flex-1 rounded-2xl border border-slate-800 bg-slate-950 px-4 text-base text-slate-100 outline-none placeholder:text-slate-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={addSubtask}
+                    className="min-h-12 rounded-2xl bg-slate-800 px-4 text-sm font-medium text-slate-100"
+                  >
+                    Add
+                  </button>
+                </div>
+
+                {subtasks.length > 0 ? (
+                  <div className="mt-3 space-y-2">
+                    {subtasks.map((subtask) => (
+                      <div
+                        key={subtask.id}
+                        className="flex items-center gap-3 rounded-2xl bg-slate-950 px-3 py-3 ring-1 ring-slate-800"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => toggleSubtask(subtask.id)}
+                          className={`flex h-6 w-6 items-center justify-center rounded-full border ${
+                            subtask.done
+                              ? 'border-emerald-400 bg-emerald-400 text-slate-950'
+                              : 'border-slate-600 text-slate-500'
+                          }`}
+                        >
+                          {subtask.done ? <Check className="h-4 w-4" /> : null}
+                        </button>
+                        <span
+                          className={`flex-1 text-sm ${
+                            subtask.done ? 'text-slate-500 line-through' : 'text-slate-200'
+                          }`}
+                        >
+                          {subtask.text}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removeSubtask(subtask.id)}
+                          className="rounded-full px-2 py-1 text-xs font-medium text-rose-300"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
               </div>
 
               <div className="flex gap-3 pt-2">
