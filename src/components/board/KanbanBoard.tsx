@@ -28,6 +28,8 @@ export function KanbanBoard({ defaultStatus = 'backlog' }: KanbanBoardProps) {
   const tasks = useTaskStore((state) => state.tasks)
   const query = useTaskStore((state) => state.query)
   const focusMode = useTaskStore((state) => state.focusMode)
+  const categoryFilter = useTaskStore((state) => state.categoryFilter)
+  const priorityFilter = useTaskStore((state) => state.priorityFilter)
   const moveTask = useTaskStore((state) => state.moveTask)
   const moveTaskToColumn = useTaskStore((state) => state.moveTaskToColumn)
   const [activeTask, setActiveTask] = useState<Task | null>(null)
@@ -54,13 +56,21 @@ export function KanbanBoard({ defaultStatus = 'backlog' }: KanbanBoardProps) {
           return false
         }
 
+        if (categoryFilter !== 'all' && task.category !== categoryFilter) {
+          return false
+        }
+
+        if (priorityFilter !== 'all' && task.priority !== priorityFilter) {
+          return false
+        }
+
         if (!focusMode) {
           return true
         }
 
         return task.status === 'today' || task.status === 'in_progress'
       }),
-    [focusMode, normalizedQuery, tasks],
+    [categoryFilter, focusMode, normalizedQuery, priorityFilter, tasks],
   )
 
   const tasksByStatus = useMemo(
@@ -117,7 +127,7 @@ export function KanbanBoard({ defaultStatus = 'backlog' }: KanbanBoardProps) {
         onDragEnd={handleDragEnd}
         onDragCancel={() => setActiveTask(null)}
       >
-        <div className="grid gap-4 xl:grid-cols-5">
+        <div className="-mx-1 flex snap-x snap-mandatory gap-4 overflow-x-auto px-1 pb-2 xl:mx-0 xl:grid xl:grid-cols-5 xl:overflow-visible xl:px-0">
           {columnOrder
             .filter((status) => !focusMode || status === 'today' || status === 'in_progress')
             .map((status) => (

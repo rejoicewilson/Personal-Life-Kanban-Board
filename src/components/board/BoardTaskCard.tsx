@@ -25,7 +25,7 @@ export function BoardTaskCard({ task, overlay = false, onClick }: BoardTaskCardP
       ref={sortable.setNodeRef}
       style={style}
       className={cn(
-        'cursor-pointer border-border/60 bg-background/95 p-4 transition hover:-translate-y-0.5 hover:shadow-soft',
+        'cursor-pointer border-border/60 bg-background/95 p-4 transition hover:-translate-y-0.5 hover:shadow-soft active:scale-[0.99]',
         sortable.isDragging && !overlay && 'opacity-40',
         overlay && 'rotate-1 shadow-soft',
       )}
@@ -34,7 +34,7 @@ export function BoardTaskCard({ task, overlay = false, onClick }: BoardTaskCardP
       <div className="flex items-start gap-3">
         <button
           type="button"
-          className="mt-0.5 rounded-full p-1 text-muted-foreground hover:bg-accent"
+          className="mt-0.5 rounded-full p-2 text-muted-foreground hover:bg-accent"
           {...sortable.attributes}
           {...sortable.listeners}
           onClick={(event) => event.stopPropagation()}
@@ -44,8 +44,8 @@ export function BoardTaskCard({ task, overlay = false, onClick }: BoardTaskCardP
 
         <div className="min-w-0 flex-1 space-y-3">
           <div className="space-y-1">
-            <h4 className="line-clamp-2 text-sm font-semibold text-foreground">{task.title}</h4>
-            {task.description ? <p className="line-clamp-2 text-sm text-muted-foreground">{task.description}</p> : null}
+            <h4 className="line-clamp-2 text-[15px] font-semibold leading-5 text-foreground">{task.title}</h4>
+            {task.description ? <p className="line-clamp-2 text-sm leading-5 text-muted-foreground">{task.description}</p> : null}
           </div>
 
           <div className="flex flex-wrap gap-2">

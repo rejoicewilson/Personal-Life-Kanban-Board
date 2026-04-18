@@ -18,13 +18,13 @@ export function BoardColumn({ status, tasks, onAddTask, onSelectTask }: BoardCol
   const { setNodeRef, isOver } = useDroppable({ id: status, data: { type: 'column', status } })
 
   return (
-    <Card className="flex min-h-[28rem] flex-col bg-card/80">
+    <Card className="flex min-h-[68vh] w-[84vw] snap-center flex-col bg-card/90 sm:w-[24rem] xl:min-h-[32rem] xl:w-auto">
       <CardHeader className="flex-row items-center justify-between space-y-0 pb-4">
         <div>
-          <CardTitle className="text-base">{columnLabels[status]}</CardTitle>
+          <CardTitle className="text-lg">{columnLabels[status]}</CardTitle>
           <p className="mt-1 text-sm text-muted-foreground">{tasks.length} tasks</p>
         </div>
-        <Button variant="ghost" size="icon" onClick={() => onAddTask(status)}>
+        <Button variant="ghost" size="icon" className="h-11 w-11" onClick={() => onAddTask(status)}>
           <Plus className="h-4 w-4" />
         </Button>
       </CardHeader>
@@ -32,7 +32,7 @@ export function BoardColumn({ status, tasks, onAddTask, onSelectTask }: BoardCol
         <div
           ref={setNodeRef}
           className={[
-            'flex min-h-[22rem] flex-col gap-3 rounded-2xl border border-dashed border-border/60 p-3 transition-colors',
+            'flex min-h-[56vh] flex-col gap-3 rounded-2xl border border-dashed border-border/60 p-3 transition-colors xl:min-h-[24rem]',
             isOver ? 'border-primary/60 bg-primary/5' : 'bg-muted/30',
           ].join(' ')}
         >
