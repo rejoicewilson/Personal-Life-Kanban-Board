@@ -139,14 +139,14 @@ export default function App() {
   }
 
   return (
-    <div className="mx-auto flex h-screen w-full max-w-md flex-col overflow-hidden bg-slate-950 text-slate-100">
-      <header className="shrink-0 px-5 pb-4 pt-6">
+    <div className="mx-auto flex h-[100dvh] w-full max-w-md flex-col overflow-hidden bg-slate-950 text-slate-100">
+      <header className="shrink-0 px-5 pb-4 pt-[calc(env(safe-area-inset-top)+1rem)]">
         <p className="text-xs uppercase tracking-[0.28em] text-slate-500">Mobile Kanban</p>
         <h1 className="mt-2 text-3xl font-semibold">Daily Flow</h1>
         <p className="mt-2 text-sm leading-6 text-slate-400">One column at a time, built for fast mobile task management.</p>
       </header>
 
-      <main className="flex-1 overflow-hidden px-4 pb-24">
+      <main className="flex-1 overflow-hidden px-4 pb-[calc(env(safe-area-inset-bottom)+6.5rem)]">
         <section className="flex h-full flex-col rounded-[28px] border border-slate-800 bg-slate-900/80 p-4 shadow-2xl shadow-black/20">
           <div className="mb-4 flex items-center justify-between">
             <div>
@@ -224,7 +224,7 @@ export default function App() {
       <button
         type="button"
         onClick={openCreateModal}
-        className="absolute bottom-24 right-4 flex min-h-14 min-w-14 items-center justify-center rounded-full bg-sky-500 text-slate-950 shadow-lg shadow-sky-500/30 transition hover:bg-sky-400"
+        className="absolute bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] right-4 flex min-h-14 min-w-14 items-center justify-center rounded-full bg-sky-500 text-slate-950 shadow-lg shadow-sky-500/30 transition hover:bg-sky-400"
       >
         <Plus className="h-6 w-6" />
       </button>
