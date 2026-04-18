@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Check, Clipboard, Play, Plus, X } from 'lucide-react'
+import { Bell, BellRing, Check, Clipboard, Play, Plus, X } from 'lucide-react'
 
 type TabKey = 'todo' | 'doing' | 'done'
 type Category = 'work' | 'personal' | 'urgent'
@@ -10,6 +10,8 @@ type Task = {
   category: Category
   status: TabKey
   timestamp: number
+  dueDate?: number
+  reminderSentAt?: number
 }
 
 const STORAGE_KEY = 'mobile-kanban.tasks'
@@ -27,9 +29,31 @@ const categoryStyles: Record<Category, string> = {
 }
 
 const starterTasks: Task[] = [
-  { id: crypto.randomUUID(), title: 'Review tomorrow schedule', category: 'personal', status: 'todo', timestamp: Date.now() - 2 * 60 * 60 * 1000 },
-  { id: crypto.randomUUID(), title: 'Finish invoice draft', category: 'work', status: 'doing', timestamp: Date.now() - 6 * 60 * 60 * 1000 },
-  { id: crypto.randomUUID(), title: 'Pay electricity bill', category: 'urgent', status: 'done', timestamp: Date.now() - 28 * 60 * 60 * 1000 },
+  {
+    id: crypto.randomUUID(),
+    title: 'Review tomorrow schedule',
+    category: 'personal',
+    status: 'todo',
+    timestamp: Date.now() - 2 * 60 * 60 * 1000,
+    dueDate: Date.now() + 2 * 60 * 60 * 1000,
+  },
+  {
+    id: crypto.randomUUID(),
+    title: 'Finish invoice draft',
+    category: 'work',
+    status: 'doing',
+    timestamp: Date.now() - 6 * 60 * 60 * 1000,
+    dueDate: Date.now() + 45 * 60 * 1000,
+  },
+  {
+    id: crypto.randomUUID(),
+    title: 'Pay electricity bill',
+    category: 'urgent',
+    status: 'done',
+    timestamp: Date.now() - 28 * 60 * 60 * 1000,
+    dueDate: Date.now() - 4 * 60 * 60 * 1000,
+    reminderSentAt: Date.now() - 4 * 60 * 60 * 1000,
+  },
 ]
 
 export function getTaskAge(timestamp: number) {
@@ -60,6 +84,65 @@ function formatTaskAge(timestamp: number) {
   return `${Math.max(0, ageInHours)}h`
 }
 
+function formatDueDateInput(timestamp?: number) {
+  if (!timestamp) {
+    return ''
+  }
+
+  const date = new Date(timestamp)
+  const timezoneOffset = date.getTimezoneOffset() * 60 * 1000
+  return new Date(timestamp - timezoneOffset).toISOString().slice(0, 16)
+}
+
+function parseDueDateInput(value: string) {
+  if (!value) {
+    return undefined
+  }
+
+  const parsed = new Date(value)
+  const timestamp = parsed.getTime()
+  return Number.isNaN(timestamp) ? undefined : timestamp
+}
+
+function formatDueDate(timestamp?: number) {
+  if (!timestamp) {
+    return null
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(new Date(timestamp))
+}
+
+async function sendReminderNotification(task: Task) {
+  const title = 'Task deadline reached'
+  const body = `${task.title}${task.dueDate ? ` is due ${formatDueDate(task.dueDate)}.` : '.'}`
+
+  if ('serviceWorker' in navigator) {
+    const registration = await navigator.serviceWorker.getRegistration()
+    if (registration) {
+      await registration.showNotification(title, {
+        body,
+        tag: `task-reminder-${task.id}`,
+        icon: '/pwa-192x192.png',
+        badge: '/pwa-192x192.png',
+      })
+      return
+    }
+  }
+
+  if ('Notification' in window) {
+    new Notification(title, {
+      body,
+      icon: '/pwa-192x192.png',
+      tag: `task-reminder-${task.id}`,
+    })
+  }
+}
+
 type TaskCardProps = {
   task: Task
   onOpen: (taskId: string) => void
@@ -70,12 +153,14 @@ type TaskCardProps = {
 function TaskCard({ task, onOpen, onMove, now }: TaskCardProps) {
   const ageClasses = useMemo(() => getTaskAgeStyles(task.timestamp), [task.timestamp, now])
   const ageLabel = useMemo(() => formatTaskAge(task.timestamp), [task.timestamp, now])
+  const dueLabel = useMemo(() => formatDueDate(task.dueDate), [task.dueDate])
+  const overdue = Boolean(task.dueDate && task.status !== 'done' && now >= task.dueDate)
 
   return (
     <button
       type="button"
       onClick={() => onOpen(task.id)}
-      className={`relative w-full rounded-3xl border bg-slate-950/80 p-4 text-left transition active:scale-[0.99] ${ageClasses}`}
+      className={`relative w-full rounded-3xl border bg-slate-950/80 p-4 text-left transition active:scale-[0.99] ${overdue ? 'border-rose-500 ring-1 ring-rose-500/30' : ageClasses}`}
     >
       <span className="absolute right-4 top-4 rounded-full bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-slate-300 ring-1 ring-slate-700">
         {ageLabel}
@@ -84,9 +169,22 @@ function TaskCard({ task, onOpen, onMove, now }: TaskCardProps) {
       <div className="flex items-start justify-between gap-3 pr-14">
         <div className="min-w-0 flex-1">
           <p className="text-base font-medium leading-6 text-slate-100">{task.title}</p>
-          <span className={`mt-3 inline-flex min-h-8 items-center rounded-full px-3 text-xs font-medium capitalize ${categoryStyles[task.category]}`}>
-            {task.category}
-          </span>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <span className={`inline-flex min-h-8 items-center rounded-full px-3 text-xs font-medium capitalize ${categoryStyles[task.category]}`}>
+              {task.category}
+            </span>
+            {dueLabel ? (
+              <span
+                className={`inline-flex min-h-8 items-center rounded-full px-3 text-xs font-medium ${
+                  overdue
+                    ? 'bg-rose-500/15 text-rose-300 ring-1 ring-rose-500/30'
+                    : 'bg-slate-900 text-slate-300 ring-1 ring-slate-700'
+                }`}
+              >
+                Due {dueLabel}
+              </span>
+            ) : null}
+          </div>
         </div>
 
         {task.status !== 'done' ? (
@@ -132,6 +230,9 @@ function loadTasks(): Task[] {
       category: (task.category as Category) ?? 'personal',
       status: (task.status as TabKey) ?? 'todo',
       timestamp: typeof task.timestamp === 'number' ? task.timestamp : Date.now(),
+      dueDate: typeof task.dueDate === 'number' ? task.dueDate : undefined,
+      reminderSentAt:
+        typeof task.reminderSentAt === 'number' ? task.reminderSentAt : undefined,
     }))
   } catch {
     return starterTasks
@@ -145,7 +246,11 @@ export default function App() {
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
   const [title, setTitle] = useState('')
   const [category, setCategory] = useState<Category>('personal')
+  const [dueDateInput, setDueDateInput] = useState('')
   const [now, setNow] = useState(() => Date.now())
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | 'unsupported'>(
+    typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'unsupported',
+  )
 
   useEffect(() => {
     document.documentElement.classList.add('dark')
@@ -167,20 +272,64 @@ export default function App() {
   const editingTask = useMemo(() => tasks.find((task) => task.id === editingTaskId) ?? null, [editingTaskId, tasks])
 
   useEffect(() => {
+    if (notificationPermission !== 'granted') {
+      return
+    }
+
+    const dueTasks = tasks.filter(
+      (task) =>
+        task.status !== 'done' &&
+        typeof task.dueDate === 'number' &&
+        task.dueDate <= now &&
+        typeof task.reminderSentAt !== 'number',
+    )
+
+    if (dueTasks.length === 0) {
+      return
+    }
+
+    let cancelled = false
+
+    async function notify() {
+      for (const task of dueTasks) {
+        if (cancelled) {
+          return
+        }
+
+        await sendReminderNotification(task)
+        setTasks((current) =>
+          current.map((item) =>
+            item.id === task.id ? { ...item, reminderSentAt: Date.now() } : item,
+          ),
+        )
+      }
+    }
+
+    void notify()
+
+    return () => {
+      cancelled = true
+    }
+  }, [notificationPermission, now, tasks])
+
+  useEffect(() => {
     if (!editingTask) {
       setTitle('')
       setCategory('personal')
+      setDueDateInput('')
       return
     }
 
     setTitle(editingTask.title)
     setCategory(editingTask.category)
+    setDueDateInput(formatDueDateInput(editingTask.dueDate))
   }, [editingTask])
 
   function openCreateModal() {
     setEditingTaskId(null)
     setTitle('')
     setCategory('personal')
+    setDueDateInput('')
     setIsComposerOpen(true)
   }
 
@@ -194,18 +343,53 @@ export default function App() {
     setEditingTaskId(null)
     setTitle('')
     setCategory('personal')
+    setDueDateInput('')
+  }
+
+  async function requestNotificationPermission() {
+    if (!('Notification' in window)) {
+      setNotificationPermission('unsupported')
+      return
+    }
+
+    const permission = await Notification.requestPermission()
+    setNotificationPermission(permission)
   }
 
   function handleSaveTask() {
     const trimmedTitle = title.trim()
+    const parsedDueDate = parseDueDateInput(dueDateInput)
     if (!trimmedTitle) {
       return
     }
 
     if (editingTask) {
-      setTasks((current) => current.map((task) => (task.id === editingTask.id ? { ...task, title: trimmedTitle, category } : task)))
+      setTasks((current) =>
+        current.map((task) =>
+          task.id === editingTask.id
+            ? {
+                ...task,
+                title: trimmedTitle,
+                category,
+                dueDate: parsedDueDate,
+                reminderSentAt:
+                  parsedDueDate && parsedDueDate <= Date.now() ? task.reminderSentAt : undefined,
+              }
+            : task,
+        ),
+      )
     } else {
-      setTasks((current) => [{ id: crypto.randomUUID(), title: trimmedTitle, category, status: activeTab, timestamp: Date.now() }, ...current])
+      setTasks((current) => [
+        {
+          id: crypto.randomUUID(),
+          title: trimmedTitle,
+          category,
+          status: activeTab,
+          timestamp: Date.now(),
+          dueDate: parsedDueDate,
+        },
+        ...current,
+      ])
     }
 
     closeComposer()
@@ -242,6 +426,28 @@ export default function App() {
         <p className="text-xs uppercase tracking-[0.28em] text-slate-500">Mobile Kanban</p>
         <h1 className="mt-2 text-3xl font-semibold">Daily Flow</h1>
         <p className="mt-2 text-sm leading-6 text-slate-400">One column at a time, built for fast mobile task management.</p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {notificationPermission === 'granted' ? (
+            <span className="inline-flex min-h-10 items-center gap-2 rounded-full bg-emerald-500/15 px-4 text-sm font-medium text-emerald-300 ring-1 ring-emerald-500/20">
+              <BellRing className="h-4 w-4" />
+              Reminders on
+            </span>
+          ) : notificationPermission === 'unsupported' ? (
+            <span className="inline-flex min-h-10 items-center gap-2 rounded-full bg-slate-900 px-4 text-sm font-medium text-slate-400 ring-1 ring-slate-700">
+              <Bell className="h-4 w-4" />
+              Notifications unavailable
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={requestNotificationPermission}
+              className="inline-flex min-h-10 items-center gap-2 rounded-full bg-slate-900 px-4 text-sm font-medium text-slate-100 ring-1 ring-slate-700"
+            >
+              <Bell className="h-4 w-4" />
+              Enable reminders
+            </button>
+          )}
+        </div>
       </header>
 
       <main className="flex-1 overflow-hidden px-4 pb-[calc(env(safe-area-inset-bottom)+6.5rem)]">
@@ -344,6 +550,16 @@ export default function App() {
                     </button>
                   ))}
                 </div>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-300">Due date</label>
+                <input
+                  type="datetime-local"
+                  value={dueDateInput}
+                  onChange={(event) => setDueDateInput(event.target.value)}
+                  className="min-h-12 w-full rounded-2xl border border-slate-800 bg-slate-950 px-4 text-base text-slate-100 outline-none"
+                />
               </div>
 
               <div className="flex gap-3 pt-2">
