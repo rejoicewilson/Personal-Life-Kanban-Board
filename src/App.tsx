@@ -68,6 +68,15 @@ const categoryPickerStyles: Record<CategoryColor, string> = {
   cyan: 'bg-cyan-950/80 text-cyan-100 ring-cyan-300/30',
 }
 
+const categorySelectionStyles: Record<CategoryColor, string> = {
+  sky: 'border-sky-300/30 bg-sky-400/10 text-sky-50 shadow-[0_12px_28px_-18px_rgba(56,189,248,0.75)]',
+  violet: 'border-fuchsia-300/30 bg-fuchsia-400/10 text-fuchsia-50 shadow-[0_12px_28px_-18px_rgba(232,121,249,0.75)]',
+  rose: 'border-rose-300/30 bg-rose-400/10 text-rose-50 shadow-[0_12px_28px_-18px_rgba(251,113,133,0.7)]',
+  emerald: 'border-emerald-300/30 bg-emerald-400/10 text-emerald-50 shadow-[0_12px_28px_-18px_rgba(52,211,153,0.75)]',
+  amber: 'border-amber-300/30 bg-amber-300/10 text-amber-50 shadow-[0_12px_28px_-18px_rgba(252,211,77,0.7)]',
+  cyan: 'border-cyan-300/30 bg-cyan-300/10 text-cyan-50 shadow-[0_12px_28px_-18px_rgba(34,211,238,0.75)]',
+}
+
 const defaultCategories: Category[] = [
   { id: 'work', name: 'Work', color: 'sky' },
   { id: 'personal', name: 'Personal', color: 'violet' },
@@ -834,18 +843,26 @@ export default function App() {
                   {categories.map((option) => (
                     <div
                       key={option.id}
-                      className={`flex min-h-12 items-center gap-2 rounded-2xl px-3 transition ${
-                        categoryId === option.id ? 'bg-white text-slate-950 shadow-[0_10px_22px_-12px_rgba(255,255,255,0.8)]' : 'bg-slate-950/60 text-slate-300 ring-1 ring-white/8'
+                      className={`flex min-h-14 items-center gap-2 rounded-2xl border px-3 transition ${
+                        categoryId === option.id
+                          ? categorySelectionStyles[option.color]
+                          : 'border-white/10 bg-slate-950/60 text-slate-300'
                       }`}
                     >
                       <button
                         type="button"
                         onClick={() => setCategoryId(option.id)}
-                        className="flex min-h-12 flex-1 items-center"
+                        className="flex min-h-14 flex-1 items-center gap-3"
                       >
+                        <span className={`h-3 w-3 rounded-full ${option.color === 'sky' ? 'bg-sky-300' : option.color === 'violet' ? 'bg-fuchsia-300' : option.color === 'rose' ? 'bg-rose-300' : option.color === 'emerald' ? 'bg-emerald-300' : option.color === 'amber' ? 'bg-amber-300' : 'bg-cyan-300'}`} />
                         <span className={`inline-flex min-h-7 items-center rounded-full px-2.5 text-xs ${categoryStyles[option.color]}`}>
                           {option.name}
                         </span>
+                        {categoryId === option.id ? (
+                          <span className="ml-auto inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-white/12 px-2 text-[11px] font-semibold text-white ring-1 ring-white/10">
+                            Selected
+                          </span>
+                        ) : null}
                       </button>
                       <button
                         type="button"
@@ -854,7 +871,9 @@ export default function App() {
                           deleteCategory(option.id)
                         }}
                         disabled={categories.length <= 1}
-                        className="flex h-9 w-9 items-center justify-center rounded-full text-slate-400 transition hover:bg-white/5 disabled:opacity-40"
+                        className={`flex h-9 w-9 items-center justify-center rounded-full transition disabled:opacity-40 ${
+                          categoryId === option.id ? 'text-white/75 hover:bg-white/10' : 'text-slate-400 hover:bg-white/5'
+                        }`}
                         aria-label={`Delete ${option.name} category`}
                       >
                         <Trash2 className="h-4 w-4" />
