@@ -32,6 +32,7 @@ import {
   sendReminderNotification,
   slugifyCategoryName,
 } from '@/lib/kanban-helpers'
+import { ensurePushSubscription, isPushConfigured, isPushSupported } from '@/lib/push'
 import { isSupabaseConfigured } from '@/lib/supabase'
 import { defaultCategories, type Category, type CategoryColor, type Task, type TabKey } from '@/types/kanban'
 
@@ -428,7 +429,25 @@ export default function App() {
     }
 
     if (permission === 'granted') {
-      setReminderEnabled(true)
+      if (!isPushSupported) {
+        setSyncError('Push notifications are not supported on this device/browser.')
+        return
+      }
+
+      if (!isPushConfigured) {
+        setSyncError('VITE_VAPID_PUBLIC_KEY is missing. Add it to your env and restart the app.')
+        return
+      }
+
+      try {
+        await ensurePushSubscription()
+        setReminderEnabled(true)
+        setSyncError(null)
+      } catch (error) {
+        console.error(error)
+        const message = error instanceof Error ? error.message : 'Could not register this device for push reminders.'
+        setSyncError(message)
+      }
     }
   }
 
