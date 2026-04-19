@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Bell, BellRing, Check, Clipboard, Play, Plus, X } from 'lucide-react'
+import { Check, Clipboard, Play, Plus, X } from 'lucide-react'
 
 type TabKey = 'todo' | 'doing' | 'done'
 type CategoryColor = 'sky' | 'violet' | 'rose' | 'emerald' | 'amber' | 'cyan'
@@ -526,14 +526,15 @@ export default function App() {
   async function requestNotificationPermission() {
     if (!('Notification' in window)) {
       setNotificationPermission('unsupported')
-      return
+      return 'unsupported' as const
     }
 
     const permission = await Notification.requestPermission()
     setNotificationPermission(permission)
+    return permission
   }
 
-  function handleSaveTask() {
+  async function handleSaveTask() {
     const trimmedTitle = title.trim()
     const parsedDueDate = parseDueDateInput(dueDateInput)
     const cleanedNote = note.trim()
@@ -542,6 +543,10 @@ export default function App() {
       .filter((subtask) => subtask.text.length > 0)
     if (!trimmedTitle) {
       return
+    }
+
+    if (parsedDueDate && notificationPermission === 'default') {
+      await requestNotificationPermission()
     }
 
     if (editingTask) {
@@ -632,32 +637,7 @@ export default function App() {
 
   return (
     <div className="mx-auto flex h-[100dvh] w-full max-w-md flex-col overflow-hidden bg-slate-950 text-slate-100">
-      <header className="shrink-0 px-5 pb-4 pt-[calc(env(safe-area-inset-top)+1rem)]">
-        <div className="flex flex-wrap gap-2">
-          {notificationPermission === 'granted' ? (
-            <span className="inline-flex min-h-10 items-center gap-2 rounded-full bg-emerald-500/15 px-4 text-sm font-medium text-emerald-300 ring-1 ring-emerald-500/20">
-              <BellRing className="h-4 w-4" />
-              Reminders on
-            </span>
-          ) : notificationPermission === 'unsupported' ? (
-            <span className="inline-flex min-h-10 items-center gap-2 rounded-full bg-slate-900 px-4 text-sm font-medium text-slate-400 ring-1 ring-slate-700">
-              <Bell className="h-4 w-4" />
-              Notifications unavailable
-            </span>
-          ) : (
-            <button
-              type="button"
-              onClick={requestNotificationPermission}
-              className="inline-flex min-h-10 items-center gap-2 rounded-full bg-slate-900 px-4 text-sm font-medium text-slate-100 ring-1 ring-slate-700"
-            >
-              <Bell className="h-4 w-4" />
-              Enable reminders
-            </button>
-          )}
-        </div>
-      </header>
-
-      <main className="flex-1 overflow-hidden px-4 pb-[calc(env(safe-area-inset-bottom)+6.5rem)]">
+      <main className="flex-1 overflow-hidden px-4 pb-[calc(env(safe-area-inset-bottom)+6.5rem)] pt-[calc(env(safe-area-inset-top)+1rem)]">
         <section className="flex h-full flex-col rounded-[28px] border border-slate-800 bg-slate-900/80 p-4 shadow-2xl shadow-black/20">
           <div className="mb-4 flex items-center justify-between">
             <div>
@@ -896,7 +876,9 @@ export default function App() {
                 ) : null}
                 <button
                   type="button"
-                  onClick={handleSaveTask}
+                  onClick={() => {
+                    void handleSaveTask()
+                  }}
                   className="min-h-12 flex-1 rounded-2xl bg-sky-500 px-4 text-base font-semibold text-slate-950"
                 >
                   {editingTask ? 'Save' : 'Add Task'}
