@@ -14,35 +14,34 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
+import {
+  deleteCategoryById,
+  deleteTaskById,
+  fetchBoardData,
+  saveCategory,
+  saveTask,
+  saveTasks,
+} from '@/lib/kanban-data'
+import {
+  formatDueDate,
+  formatDueDateInput,
+  formatTaskAge,
+  getTaskAgeStyles,
+  parseDueDateInput,
+  resolveCategory,
+  sendReminderNotification,
+  slugifyCategoryName,
+} from '@/lib/kanban-helpers'
+import { isSupabaseConfigured } from '@/lib/supabase'
+import { defaultCategories, type Category, type CategoryColor, type Task, type TabKey } from '@/types/kanban'
 
-type TabKey = 'todo' | 'doing' | 'done'
-type CategoryColor = 'sky' | 'violet' | 'rose' | 'emerald' | 'amber' | 'cyan'
-
-type Category = {
-  id: string
-  name: string
-  color: CategoryColor
+type TaskCardProps = {
+  task: Task
+  category: Category
+  onOpen: (taskId: string) => void
+  onMove: (taskId: string) => void
+  now: number
 }
-
-type Task = {
-  id: string
-  title: string
-  categoryId: string
-  status: TabKey
-  timestamp: number
-  dueDate?: number
-  reminderEnabled?: boolean
-  reminderSentAt?: number
-  note?: string
-  subtasks: Array<{
-    id: string
-    text: string
-    done: boolean
-  }>
-}
-
-const STORAGE_KEY = 'mobile-kanban.tasks'
-const CATEGORY_STORAGE_KEY = 'mobile-kanban.categories'
 
 const tabs: Array<{ key: TabKey; label: string; icon: typeof Clipboard }> = [
   { key: 'todo', label: 'To Do', icon: Clipboard },
@@ -75,204 +74,6 @@ const categorySelectionStyles: Record<CategoryColor, string> = {
   emerald: 'border-emerald-300/30 bg-emerald-400/10 text-emerald-50 shadow-[0_12px_28px_-18px_rgba(52,211,153,0.75)]',
   amber: 'border-amber-300/30 bg-amber-300/10 text-amber-50 shadow-[0_12px_28px_-18px_rgba(252,211,77,0.7)]',
   cyan: 'border-cyan-300/30 bg-cyan-300/10 text-cyan-50 shadow-[0_12px_28px_-18px_rgba(34,211,238,0.75)]',
-}
-
-const defaultCategories: Category[] = [
-  { id: 'work', name: 'Work', color: 'sky' },
-  { id: 'personal', name: 'Personal', color: 'violet' },
-  { id: 'urgent', name: 'Urgent', color: 'rose' },
-]
-
-const starterTasks: Task[] = [
-  {
-    id: crypto.randomUUID(),
-    title: 'Review tomorrow schedule',
-    categoryId: 'personal',
-    status: 'todo',
-    timestamp: Date.now() - 2 * 60 * 60 * 1000,
-    dueDate: Date.now() + 2 * 60 * 60 * 1000,
-    reminderEnabled: true,
-    note: 'Keep it light and make room for gym time.',
-    subtasks: [
-      { id: crypto.randomUUID(), text: 'Check calendar', done: true },
-      { id: crypto.randomUUID(), text: 'Block workout slot', done: false },
-    ],
-  },
-  {
-    id: crypto.randomUUID(),
-    title: 'Finish invoice draft',
-    categoryId: 'work',
-    status: 'doing',
-    timestamp: Date.now() - 6 * 60 * 60 * 1000,
-    dueDate: Date.now() + 45 * 60 * 1000,
-    reminderEnabled: true,
-    note: 'Send before lunch if possible.',
-    subtasks: [
-      { id: crypto.randomUUID(), text: 'Verify billable hours', done: true },
-      { id: crypto.randomUUID(), text: 'Attach PDF summary', done: false },
-    ],
-  },
-  {
-    id: crypto.randomUUID(),
-    title: 'Pay electricity bill',
-    categoryId: 'urgent',
-    status: 'done',
-    timestamp: Date.now() - 28 * 60 * 60 * 1000,
-    dueDate: Date.now() - 4 * 60 * 60 * 1000,
-    reminderEnabled: true,
-    reminderSentAt: Date.now() - 4 * 60 * 60 * 1000,
-    note: 'Paid through the banking app.',
-    subtasks: [{ id: crypto.randomUUID(), text: 'Save receipt screenshot', done: true }],
-  },
-]
-
-function slugifyCategoryName(name: string) {
-  return name
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-}
-
-function loadCategories(): Category[] {
-  if (typeof window === 'undefined') {
-    return defaultCategories
-  }
-
-  const stored = window.localStorage.getItem(CATEGORY_STORAGE_KEY)
-  if (!stored) {
-    return defaultCategories
-  }
-
-  try {
-    const parsed = JSON.parse(stored) as Array<Partial<Category>>
-    if (!Array.isArray(parsed)) {
-      return defaultCategories
-    }
-
-    const categories = parsed
-      .filter((item) => typeof item === 'object' && item !== null)
-      .map((item) => ({
-        id: typeof item.id === 'string' && item.id.trim() ? item.id : crypto.randomUUID(),
-        name: typeof item.name === 'string' && item.name.trim() ? item.name.trim() : 'Custom',
-        color:
-          typeof item.color === 'string' && item.color in categoryStyles
-            ? (item.color as CategoryColor)
-            : 'sky',
-      }))
-
-    return categories.length > 0 ? categories : defaultCategories
-  } catch {
-    return defaultCategories
-  }
-}
-
-export function getTaskAge(timestamp: number) {
-  return Math.floor((Date.now() - timestamp) / (1000 * 60 * 60))
-}
-
-function getTaskAgeStyles(timestamp: number) {
-  const ageInHours = getTaskAge(timestamp)
-
-  if (ageInHours > 24) {
-    return 'border-red-500 ring-1 ring-red-500/30'
-  }
-
-  if (ageInHours > 4) {
-    return 'border-amber-500 ring-1 ring-amber-500/20'
-  }
-
-  return 'border-slate-800'
-}
-
-function formatTaskAge(timestamp: number) {
-  const ageInHours = getTaskAge(timestamp)
-
-  if (ageInHours >= 24) {
-    return `${Math.floor(ageInHours / 24)}d`
-  }
-
-  return `${Math.max(0, ageInHours)}h`
-}
-
-function formatDueDateInput(timestamp?: number) {
-  if (!timestamp) {
-    return ''
-  }
-
-  const date = new Date(timestamp)
-  const timezoneOffset = date.getTimezoneOffset() * 60 * 1000
-  return new Date(timestamp - timezoneOffset).toISOString().slice(0, 16)
-}
-
-function parseDueDateInput(value: string) {
-  if (!value) {
-    return undefined
-  }
-
-  const parsed = new Date(value)
-  const timestamp = parsed.getTime()
-  return Number.isNaN(timestamp) ? undefined : timestamp
-}
-
-function formatDueDate(timestamp?: number) {
-  if (!timestamp) {
-    return null
-  }
-
-  return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(new Date(timestamp))
-}
-
-async function sendReminderNotification(task: Task) {
-  const title = 'Task deadline reached'
-  const body = `${task.title}${task.dueDate ? ` is due ${formatDueDate(task.dueDate)}.` : '.'}`
-
-  if ('serviceWorker' in navigator) {
-    const registration = await navigator.serviceWorker.getRegistration()
-    if (registration) {
-      await registration.showNotification(title, {
-        body,
-        tag: `task-reminder-${task.id}`,
-        icon: '/pwa-192x192.png',
-        badge: '/pwa-192x192.png',
-      })
-      return
-    }
-  }
-
-  if ('Notification' in window) {
-    new Notification(title, {
-      body,
-      icon: '/pwa-192x192.png',
-      tag: `task-reminder-${task.id}`,
-    })
-  }
-}
-
-function resolveCategory(
-  categories: Category[],
-  categoryId: string,
-): Category {
-  return (
-    categories.find((category) => category.id === categoryId) ?? {
-      id: categoryId,
-      name: 'Uncategorized',
-      color: 'sky',
-    }
-  )
-}
-
-type TaskCardProps = {
-  task: Task
-  category: Category
-  onOpen: (taskId: string) => void
-  onMove: (taskId: string) => void
-  now: number
 }
 
 function TaskCard({ task, category, onOpen, onMove, now }: TaskCardProps) {
@@ -351,91 +152,70 @@ function TaskCard({ task, category, onOpen, onMove, now }: TaskCardProps) {
   )
 }
 
-function loadTasks(): Task[] {
-  if (typeof window === 'undefined') {
-    return starterTasks
-  }
-
-  const stored = window.localStorage.getItem(STORAGE_KEY)
-  if (!stored) {
-    return starterTasks
-  }
-
-  try {
-    const parsed = JSON.parse(stored) as Array<Partial<Task>>
-    if (!Array.isArray(parsed)) {
-      return starterTasks
-    }
-
-    return parsed.map((task) => ({
-      id: task.id ?? crypto.randomUUID(),
-      title: task.title ?? 'Untitled task',
-      categoryId:
-        typeof task.categoryId === 'string'
-          ? task.categoryId
-          : typeof (task as { category?: string }).category === 'string'
-            ? (task as { category?: string }).category!
-            : 'personal',
-      status: (task.status as TabKey) ?? 'todo',
-      timestamp: typeof task.timestamp === 'number' ? task.timestamp : Date.now(),
-      dueDate: typeof task.dueDate === 'number' ? task.dueDate : undefined,
-      reminderEnabled: typeof task.reminderEnabled === 'boolean' ? task.reminderEnabled : false,
-      reminderSentAt:
-        typeof task.reminderSentAt === 'number' ? task.reminderSentAt : undefined,
-      note: typeof task.note === 'string' ? task.note : undefined,
-      subtasks: Array.isArray(task.subtasks)
-        ? task.subtasks
-            .filter((subtask) => typeof subtask === 'object' && subtask !== null)
-            .map((subtask) => ({
-              id:
-                'id' in subtask && typeof subtask.id === 'string'
-                  ? subtask.id
-                  : crypto.randomUUID(),
-              text:
-                'text' in subtask && typeof subtask.text === 'string'
-                  ? subtask.text
-                  : '',
-              done: 'done' in subtask ? Boolean(subtask.done) : false,
-            }))
-            .filter((subtask) => subtask.text.trim().length > 0)
-        : [],
-    }))
-  } catch {
-    return starterTasks
-  }
-}
-
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabKey>('todo')
-  const [categories, setCategories] = useState<Category[]>(() => loadCategories())
-  const [tasks, setTasks] = useState<Task[]>(() => loadTasks())
+  const [categories, setCategories] = useState<Category[]>(defaultCategories)
+  const [tasks, setTasks] = useState<Task[]>([])
   const [isComposerOpen, setIsComposerOpen] = useState(false)
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
   const [title, setTitle] = useState('')
-  const [categoryId, setCategoryId] = useState<string>('personal')
+  const [categoryId, setCategoryId] = useState<string>(defaultCategories[0]?.id ?? 'personal')
   const [newCategoryName, setNewCategoryName] = useState('')
   const [newCategoryColor, setNewCategoryColor] = useState<CategoryColor>('sky')
   const [dueDateInput, setDueDateInput] = useState('')
   const [reminderEnabled, setReminderEnabled] = useState(false)
   const [note, setNote] = useState('')
-  const [subtasks, setSubtasks] = useState<Array<{ id: string; text: string; done: boolean }>>([])
+  const [subtasks, setSubtasks] = useState<Task['subtasks']>([])
   const [subtaskInput, setSubtaskInput] = useState('')
   const [now, setNow] = useState(() => Date.now())
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | 'unsupported'>(
     typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'unsupported',
   )
+  const [isLoading, setIsLoading] = useState(true)
+  const [syncError, setSyncError] = useState<string | null>(null)
 
   useEffect(() => {
     document.documentElement.classList.add('dark')
   }, [])
 
   useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks))
-  }, [tasks])
+    if (!isSupabaseConfigured) {
+      setIsLoading(false)
+      setSyncError('Supabase is not configured yet. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.')
+      return
+    }
 
-  useEffect(() => {
-    window.localStorage.setItem(CATEGORY_STORAGE_KEY, JSON.stringify(categories))
-  }, [categories])
+    let cancelled = false
+
+    async function load() {
+      try {
+        const data = await fetchBoardData()
+        if (cancelled) {
+          return
+        }
+
+        setCategories(data.categories)
+        setTasks(data.tasks)
+        setCategoryId(data.categories[0]?.id ?? defaultCategories[0]?.id ?? 'personal')
+        setSyncError(null)
+      } catch (error) {
+        console.error(error)
+        if (!cancelled) {
+          setSyncError('Could not load your Supabase board. Check your schema, env vars, and anonymous auth settings.')
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false)
+        }
+      }
+    }
+
+    void load()
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -475,11 +255,15 @@ export default function App() {
         }
 
         await sendReminderNotification(task)
-        setTasks((current) =>
-          current.map((item) =>
-            item.id === task.id ? { ...item, reminderSentAt: Date.now() } : item,
-          ),
-        )
+        const updatedTask = { ...task, reminderSentAt: Date.now() }
+        setTasks((current) => current.map((item) => (item.id === task.id ? updatedTask : item)))
+        try {
+          await saveTask(updatedTask)
+          setSyncError(null)
+        } catch (error) {
+          console.error(error)
+          setSyncError('A reminder fired, but the reminder state did not sync to Supabase.')
+        }
       }
     }
 
@@ -493,7 +277,7 @@ export default function App() {
   useEffect(() => {
     if (!editingTask) {
       setTitle('')
-      setCategoryId(categories[0]?.id ?? 'personal')
+      setCategoryId(categories[0]?.id ?? defaultCategories[0]?.id ?? 'personal')
       setNewCategoryName('')
       setNewCategoryColor('sky')
       setDueDateInput('')
@@ -518,7 +302,7 @@ export default function App() {
   function openCreateModal() {
     setEditingTaskId(null)
     setTitle('')
-    setCategoryId(categories[0]?.id ?? 'personal')
+    setCategoryId(categories[0]?.id ?? defaultCategories[0]?.id ?? 'personal')
     setNewCategoryName('')
     setNewCategoryColor('sky')
     setDueDateInput('')
@@ -538,7 +322,7 @@ export default function App() {
     setIsComposerOpen(false)
     setEditingTaskId(null)
     setTitle('')
-    setCategoryId(categories[0]?.id ?? 'personal')
+    setCategoryId(categories[0]?.id ?? defaultCategories[0]?.id ?? 'personal')
     setNewCategoryName('')
     setNewCategoryColor('sky')
     setDueDateInput('')
@@ -546,6 +330,16 @@ export default function App() {
     setNote('')
     setSubtasks([])
     setSubtaskInput('')
+  }
+
+  async function syncOperation(operation: () => Promise<void>, message: string) {
+    try {
+      await operation()
+      setSyncError(null)
+    } catch (error) {
+      console.error(error)
+      setSyncError(message)
+    }
   }
 
   function createCategory() {
@@ -573,6 +367,7 @@ export default function App() {
     setCategoryId(category.id)
     setNewCategoryName('')
     setNewCategoryColor('sky')
+    void syncOperation(() => saveCategory(category), 'Could not save the new category to Supabase.')
   }
 
   function deleteCategory(categoryToDeleteId: string) {
@@ -580,10 +375,13 @@ export default function App() {
       return
     }
 
-    const nextCategories = categories.filter((item) => item.id !== categoryToDeleteId)
-    const fallbackCategoryId = nextCategories[0]?.id ?? 'personal'
+    const fallbackCategoryId =
+      categories.find((item) => item.id !== categoryToDeleteId)?.id ?? defaultCategories[0]?.id ?? 'personal'
+    const affectedTasks = tasks
+      .filter((task) => task.categoryId === categoryToDeleteId)
+      .map((task) => ({ ...task, categoryId: fallbackCategoryId }))
 
-    setCategories(nextCategories)
+    setCategories((current) => current.filter((item) => item.id !== categoryToDeleteId))
     setTasks((current) =>
       current.map((task) =>
         task.categoryId === categoryToDeleteId ? { ...task, categoryId: fallbackCategoryId } : task,
@@ -593,6 +391,11 @@ export default function App() {
     if (categoryId === categoryToDeleteId) {
       setCategoryId(fallbackCategoryId)
     }
+
+    void syncOperation(async () => {
+      await saveTasks(affectedTasks)
+      await deleteCategoryById(categoryToDeleteId)
+    }, 'Could not delete the category in Supabase.')
   }
 
   async function requestNotificationPermission() {
@@ -634,45 +437,43 @@ export default function App() {
     const cleanedSubtasks = subtasks
       .map((subtask) => ({ ...subtask, text: subtask.text.trim() }))
       .filter((subtask) => subtask.text.length > 0)
+
     if (!trimmedTitle) {
       return
     }
 
     if (editingTask) {
-      setTasks((current) =>
-        current.map((task) =>
-          task.id === editingTask.id
-            ? {
-                ...task,
-                title: trimmedTitle,
-                categoryId,
-                dueDate: parsedDueDate,
-                reminderEnabled: parsedDueDate ? reminderEnabled : false,
-                note: cleanedNote || undefined,
-                subtasks: cleanedSubtasks,
-                reminderSentAt:
-                  parsedDueDate && reminderEnabled && parsedDueDate <= Date.now()
-                    ? task.reminderSentAt
-                    : undefined,
-              }
-            : task,
-        ),
-      )
+      const updatedTask: Task = {
+        ...editingTask,
+        title: trimmedTitle,
+        categoryId,
+        dueDate: parsedDueDate,
+        reminderEnabled: parsedDueDate ? reminderEnabled : false,
+        note: cleanedNote || undefined,
+        subtasks: cleanedSubtasks,
+        reminderSentAt:
+          parsedDueDate && reminderEnabled && parsedDueDate <= Date.now()
+            ? editingTask.reminderSentAt
+            : undefined,
+      }
+
+      setTasks((current) => current.map((task) => (task.id === editingTask.id ? updatedTask : task)))
+      void syncOperation(() => saveTask(updatedTask), 'Could not save the task changes to Supabase.')
     } else {
-      setTasks((current) => [
-        {
-          id: crypto.randomUUID(),
-          title: trimmedTitle,
-          categoryId,
-          status: activeTab,
-          timestamp: Date.now(),
-          dueDate: parsedDueDate,
-          reminderEnabled: parsedDueDate ? reminderEnabled : false,
-          note: cleanedNote || undefined,
-          subtasks: cleanedSubtasks,
-        },
-        ...current,
-      ])
+      const newTask: Task = {
+        id: crypto.randomUUID(),
+        title: trimmedTitle,
+        categoryId,
+        status: activeTab,
+        timestamp: Date.now(),
+        dueDate: parsedDueDate,
+        reminderEnabled: parsedDueDate ? reminderEnabled : false,
+        note: cleanedNote || undefined,
+        subtasks: cleanedSubtasks,
+      }
+
+      setTasks((current) => [newTask, ...current])
+      void syncOperation(() => saveTask(newTask), 'Could not create the task in Supabase.')
     }
 
     closeComposer()
@@ -681,6 +482,7 @@ export default function App() {
   function handleDeleteTask(taskId: string) {
     setTasks((current) => current.filter((task) => task.id !== taskId))
     closeComposer()
+    void syncOperation(() => deleteTaskById(taskId), 'Could not delete the task from Supabase.')
   }
 
   function addSubtask() {
@@ -689,18 +491,13 @@ export default function App() {
       return
     }
 
-    setSubtasks((current) => [
-      ...current,
-      { id: crypto.randomUUID(), text: trimmed, done: false },
-    ])
+    setSubtasks((current) => [...current, { id: crypto.randomUUID(), text: trimmed, done: false }])
     setSubtaskInput('')
   }
 
   function toggleSubtask(id: string) {
     setSubtasks((current) =>
-      current.map((subtask) =>
-        subtask.id === id ? { ...subtask, done: !subtask.done } : subtask,
-      ),
+      current.map((subtask) => (subtask.id === id ? { ...subtask, done: !subtask.done } : subtask)),
     )
   }
 
@@ -709,23 +506,24 @@ export default function App() {
   }
 
   function moveTaskForward(taskId: string) {
-    setTasks((current) =>
-      current.map((task) => {
-        if (task.id !== taskId) {
-          return task
-        }
+    const currentTask = tasks.find((task) => task.id === taskId)
+    if (!currentTask) {
+      return
+    }
 
-        if (task.status === 'todo') {
-          return { ...task, status: 'doing', timestamp: Date.now() }
-        }
+    const updatedTask: Task =
+      currentTask.status === 'todo'
+        ? { ...currentTask, status: 'doing', timestamp: Date.now() }
+        : currentTask.status === 'doing'
+          ? { ...currentTask, status: 'done', timestamp: Date.now() }
+          : currentTask
 
-        if (task.status === 'doing') {
-          return { ...task, status: 'done', timestamp: Date.now() }
-        }
+    if (updatedTask === currentTask) {
+      return
+    }
 
-        return task
-      }),
-    )
+    setTasks((current) => current.map((task) => (task.id === taskId ? updatedTask : task)))
+    void syncOperation(() => saveTask(updatedTask), 'Could not move the task in Supabase.')
   }
 
   return (
@@ -747,8 +545,18 @@ export default function App() {
             </div>
           </div>
 
+          {syncError ? (
+            <div className="mb-4 rounded-2xl border border-amber-300/20 bg-amber-300/10 px-4 py-3 text-sm text-amber-100">
+              {syncError}
+            </div>
+          ) : null}
+
           <div className="flex-1 space-y-3 overflow-y-auto pr-1">
-            {visibleTasks.length > 0 ? (
+            {isLoading ? (
+              <div className="flex h-full min-h-56 items-center justify-center rounded-[28px] border border-dashed border-white/10 bg-slate-950/45 px-6 text-center text-sm leading-6 text-slate-400">
+                Loading your Supabase board...
+              </div>
+            ) : visibleTasks.length > 0 ? (
               visibleTasks.map((task) => (
                 <TaskCard
                   key={task.id}
