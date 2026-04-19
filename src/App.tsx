@@ -153,6 +153,18 @@ function TaskCard({ task, category, onOpen, onMove, now }: TaskCardProps) {
   )
 }
 
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) {
+    return error.message
+  }
+
+  if (typeof error === 'object' && error !== null && 'message' in error && typeof error.message === 'string') {
+    return error.message
+  }
+
+  return fallback
+}
+
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabKey>('todo')
   const [categories, setCategories] = useState<Category[]>(defaultCategories)
@@ -165,6 +177,7 @@ export default function App() {
   const [newCategoryColor, setNewCategoryColor] = useState<CategoryColor>('sky')
   const [dueDateInput, setDueDateInput] = useState('')
   const [reminderEnabled, setReminderEnabled] = useState(false)
+  const [reminderStatus, setReminderStatus] = useState<string | null>(null)
   const [note, setNote] = useState('')
   const [subtasks, setSubtasks] = useState<Task['subtasks']>([])
   const [subtaskInput, setSubtaskInput] = useState('')
@@ -285,6 +298,7 @@ export default function App() {
       setNewCategoryColor('sky')
       setDueDateInput('')
       setReminderEnabled(false)
+      setReminderStatus(null)
       setNote('')
       setSubtasks([])
       setSubtaskInput('')
@@ -297,6 +311,7 @@ export default function App() {
     setNewCategoryColor('sky')
     setDueDateInput(formatDueDateInput(editingTask.dueDate))
     setReminderEnabled(Boolean(editingTask.reminderEnabled && editingTask.dueDate))
+    setReminderStatus(null)
     setNote(editingTask.note ?? '')
     setSubtasks(editingTask.subtasks)
     setSubtaskInput('')
@@ -310,6 +325,7 @@ export default function App() {
     setNewCategoryColor('sky')
     setDueDateInput('')
     setReminderEnabled(false)
+    setReminderStatus(null)
     setNote('')
     setSubtasks([])
     setSubtaskInput('')
@@ -330,6 +346,7 @@ export default function App() {
     setNewCategoryColor('sky')
     setDueDateInput('')
     setReminderEnabled(false)
+    setReminderStatus(null)
     setNote('')
     setSubtasks([])
     setSubtaskInput('')
@@ -415,10 +432,12 @@ export default function App() {
   async function handleReminderToggle() {
     if (reminderEnabled) {
       setReminderEnabled(false)
+      setReminderStatus('Backend reminder disabled for this task.')
       return
     }
 
     if (!dueDateInput) {
+      setReminderStatus('Add a due date first.')
       return
     }
 
@@ -430,25 +449,39 @@ export default function App() {
 
     if (permission === 'granted') {
       if (!isPushSupported) {
-        setSyncError('Push notifications are not supported on this device/browser.')
+        const message = 'Push notifications are not supported on this device/browser.'
+        setSyncError(message)
+        setReminderStatus(message)
         return
       }
 
       if (!isPushConfigured) {
-        setSyncError('VITE_VAPID_PUBLIC_KEY is missing. Add it to your env and restart the app.')
+        const message = 'VITE_VAPID_PUBLIC_KEY is missing. Add it to your env and restart the app.'
+        setSyncError(message)
+        setReminderStatus(message)
         return
       }
 
       try {
         await ensurePushSubscription()
         setReminderEnabled(true)
+        setReminderStatus('This device is registered for backend push reminders.')
         setSyncError(null)
       } catch (error) {
         console.error(error)
-        const message = error instanceof Error ? error.message : 'Could not register this device for push reminders.'
+        const message = getErrorMessage(error, 'Could not register this device for push reminders.')
         setSyncError(message)
+        setReminderStatus(message)
       }
+      return
     }
+
+    if (permission === 'denied') {
+      setReminderStatus('Notification permission is blocked in the browser. Enable notifications for this site and try again.')
+      return
+    }
+
+    setReminderStatus('Notification permission was not granted.')
   }
 
   async function handleSaveTask() {
@@ -789,6 +822,11 @@ export default function App() {
                 <p className="mt-2 text-xs text-slate-500">
                   Add a due date first. Reminders work only while the app is open or installed.
                 </p>
+                {reminderStatus ? (
+                  <p className="mt-2 rounded-2xl border border-amber-300/15 bg-amber-300/10 px-3 py-2 text-xs text-amber-100">
+                    {reminderStatus}
+                  </p>
+                ) : null}
               </div>
 
               <div className="rounded-[28px] border border-white/10 bg-white/5 p-4">
