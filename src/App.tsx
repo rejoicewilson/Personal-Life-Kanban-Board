@@ -17,6 +17,7 @@ type Task = {
   status: TabKey
   timestamp: number
   dueDate?: number
+  reminderEnabled?: boolean
   reminderSentAt?: number
   note?: string
   subtasks: Array<{
@@ -37,11 +38,20 @@ const tabs: Array<{ key: TabKey; label: string; icon: typeof Clipboard }> = [
 
 const categoryStyles: Record<CategoryColor, string> = {
   sky: 'bg-sky-500/15 text-sky-300 ring-1 ring-sky-400/20',
-  violet: 'bg-violet-500/15 text-violet-300 ring-1 ring-violet-400/20',
+  violet: 'bg-violet-400/20 text-violet-100 ring-1 ring-violet-300/30',
   rose: 'bg-rose-500/15 text-rose-300 ring-1 ring-rose-400/20',
   emerald: 'bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-400/20',
   amber: 'bg-amber-500/15 text-amber-300 ring-1 ring-amber-400/20',
   cyan: 'bg-cyan-500/15 text-cyan-300 ring-1 ring-cyan-400/20',
+}
+
+const categoryPickerStyles: Record<CategoryColor, string> = {
+  sky: 'bg-sky-950 text-sky-200 ring-sky-400/30',
+  violet: 'bg-violet-950 text-violet-100 ring-violet-300/40',
+  rose: 'bg-rose-950 text-rose-200 ring-rose-400/30',
+  emerald: 'bg-emerald-950 text-emerald-200 ring-emerald-400/30',
+  amber: 'bg-amber-950 text-amber-200 ring-amber-400/30',
+  cyan: 'bg-cyan-950 text-cyan-200 ring-cyan-400/30',
 }
 
 const defaultCategories: Category[] = [
@@ -58,6 +68,7 @@ const starterTasks: Task[] = [
     status: 'todo',
     timestamp: Date.now() - 2 * 60 * 60 * 1000,
     dueDate: Date.now() + 2 * 60 * 60 * 1000,
+    reminderEnabled: true,
     note: 'Keep it light and make room for gym time.',
     subtasks: [
       { id: crypto.randomUUID(), text: 'Check calendar', done: true },
@@ -71,6 +82,7 @@ const starterTasks: Task[] = [
     status: 'doing',
     timestamp: Date.now() - 6 * 60 * 60 * 1000,
     dueDate: Date.now() + 45 * 60 * 1000,
+    reminderEnabled: true,
     note: 'Send before lunch if possible.',
     subtasks: [
       { id: crypto.randomUUID(), text: 'Verify billable hours', done: true },
@@ -84,6 +96,7 @@ const starterTasks: Task[] = [
     status: 'done',
     timestamp: Date.now() - 28 * 60 * 60 * 1000,
     dueDate: Date.now() - 4 * 60 * 60 * 1000,
+    reminderEnabled: true,
     reminderSentAt: Date.now() - 4 * 60 * 60 * 1000,
     note: 'Paid through the banking app.',
     subtasks: [{ id: crypto.randomUUID(), text: 'Save receipt screenshot', done: true }],
@@ -334,6 +347,7 @@ function loadTasks(): Task[] {
       status: (task.status as TabKey) ?? 'todo',
       timestamp: typeof task.timestamp === 'number' ? task.timestamp : Date.now(),
       dueDate: typeof task.dueDate === 'number' ? task.dueDate : undefined,
+      reminderEnabled: typeof task.reminderEnabled === 'boolean' ? task.reminderEnabled : false,
       reminderSentAt:
         typeof task.reminderSentAt === 'number' ? task.reminderSentAt : undefined,
       note: typeof task.note === 'string' ? task.note : undefined,
@@ -370,6 +384,7 @@ export default function App() {
   const [newCategoryName, setNewCategoryName] = useState('')
   const [newCategoryColor, setNewCategoryColor] = useState<CategoryColor>('sky')
   const [dueDateInput, setDueDateInput] = useState('')
+  const [reminderEnabled, setReminderEnabled] = useState(false)
   const [note, setNote] = useState('')
   const [subtasks, setSubtasks] = useState<Array<{ id: string; text: string; done: boolean }>>([])
   const [subtaskInput, setSubtaskInput] = useState('')
@@ -410,6 +425,7 @@ export default function App() {
       (task) =>
         task.status !== 'done' &&
         typeof task.dueDate === 'number' &&
+        task.reminderEnabled === true &&
         task.dueDate <= now &&
         typeof task.reminderSentAt !== 'number',
     )
@@ -449,6 +465,7 @@ export default function App() {
       setNewCategoryName('')
       setNewCategoryColor('sky')
       setDueDateInput('')
+      setReminderEnabled(false)
       setNote('')
       setSubtasks([])
       setSubtaskInput('')
@@ -460,6 +477,7 @@ export default function App() {
     setNewCategoryName('')
     setNewCategoryColor('sky')
     setDueDateInput(formatDueDateInput(editingTask.dueDate))
+    setReminderEnabled(Boolean(editingTask.reminderEnabled && editingTask.dueDate))
     setNote(editingTask.note ?? '')
     setSubtasks(editingTask.subtasks)
     setSubtaskInput('')
@@ -472,6 +490,7 @@ export default function App() {
     setNewCategoryName('')
     setNewCategoryColor('sky')
     setDueDateInput('')
+    setReminderEnabled(false)
     setNote('')
     setSubtasks([])
     setSubtaskInput('')
@@ -491,6 +510,7 @@ export default function App() {
     setNewCategoryName('')
     setNewCategoryColor('sky')
     setDueDateInput('')
+    setReminderEnabled(false)
     setNote('')
     setSubtasks([])
     setSubtaskInput('')
@@ -523,6 +543,26 @@ export default function App() {
     setNewCategoryColor('sky')
   }
 
+  function deleteCategory(categoryToDeleteId: string) {
+    if (categories.length <= 1) {
+      return
+    }
+
+    const nextCategories = categories.filter((item) => item.id !== categoryToDeleteId)
+    const fallbackCategoryId = nextCategories[0]?.id ?? 'personal'
+
+    setCategories(nextCategories)
+    setTasks((current) =>
+      current.map((task) =>
+        task.categoryId === categoryToDeleteId ? { ...task, categoryId: fallbackCategoryId } : task,
+      ),
+    )
+
+    if (categoryId === categoryToDeleteId) {
+      setCategoryId(fallbackCategoryId)
+    }
+  }
+
   async function requestNotificationPermission() {
     if (!('Notification' in window)) {
       setNotificationPermission('unsupported')
@@ -532,6 +572,27 @@ export default function App() {
     const permission = await Notification.requestPermission()
     setNotificationPermission(permission)
     return permission
+  }
+
+  async function handleReminderToggle() {
+    if (reminderEnabled) {
+      setReminderEnabled(false)
+      return
+    }
+
+    if (!dueDateInput) {
+      return
+    }
+
+    let permission = notificationPermission
+
+    if (permission === 'default') {
+      permission = await requestNotificationPermission()
+    }
+
+    if (permission === 'granted') {
+      setReminderEnabled(true)
+    }
   }
 
   async function handleSaveTask() {
@@ -545,10 +606,6 @@ export default function App() {
       return
     }
 
-    if (parsedDueDate && notificationPermission === 'default') {
-      await requestNotificationPermission()
-    }
-
     if (editingTask) {
       setTasks((current) =>
         current.map((task) =>
@@ -558,10 +615,13 @@ export default function App() {
                 title: trimmedTitle,
                 categoryId,
                 dueDate: parsedDueDate,
+                reminderEnabled: parsedDueDate ? reminderEnabled : false,
                 note: cleanedNote || undefined,
                 subtasks: cleanedSubtasks,
                 reminderSentAt:
-                  parsedDueDate && parsedDueDate <= Date.now() ? task.reminderSentAt : undefined,
+                  parsedDueDate && reminderEnabled && parsedDueDate <= Date.now()
+                    ? task.reminderSentAt
+                    : undefined,
               }
             : task,
         ),
@@ -575,6 +635,7 @@ export default function App() {
           status: activeTab,
           timestamp: Date.now(),
           dueDate: parsedDueDate,
+          reminderEnabled: parsedDueDate ? reminderEnabled : false,
           note: cleanedNote || undefined,
           subtasks: cleanedSubtasks,
         },
@@ -728,18 +789,34 @@ export default function App() {
                 <label className="mb-2 block text-sm font-medium text-slate-300">Category</label>
                 <div className="grid grid-cols-2 gap-2">
                   {categories.map((option) => (
-                    <button
+                    <div
                       key={option.id}
-                      type="button"
-                      onClick={() => setCategoryId(option.id)}
-                      className={`min-h-12 rounded-2xl px-3 text-sm font-medium transition ${
+                      className={`flex min-h-12 items-center gap-2 rounded-2xl px-3 transition ${
                         categoryId === option.id ? 'bg-slate-100 text-slate-950' : 'bg-slate-800 text-slate-300'
                       }`}
                     >
-                      <span className={`inline-flex min-h-7 items-center rounded-full px-2.5 text-xs ${categoryStyles[option.color]}`}>
-                        {option.name}
-                      </span>
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => setCategoryId(option.id)}
+                        className="flex min-h-12 flex-1 items-center"
+                      >
+                        <span className={`inline-flex min-h-7 items-center rounded-full px-2.5 text-xs ${categoryStyles[option.color]}`}>
+                          {option.name}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          deleteCategory(option.id)
+                        }}
+                        disabled={categories.length <= 1}
+                        className="flex h-9 w-9 items-center justify-center rounded-full text-slate-400 disabled:opacity-40"
+                        aria-label={`Delete ${option.name} category`}
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
                   ))}
                 </div>
 
@@ -760,9 +837,9 @@ export default function App() {
                           key={color}
                           type="button"
                           onClick={() => setNewCategoryColor(color)}
-                          className={`min-h-11 rounded-2xl px-3 text-xs font-medium capitalize transition ${
-                            newCategoryColor === color ? 'ring-2 ring-slate-100' : 'ring-1 ring-slate-800'
-                          } ${categoryStyles[color]}`}
+                          className={`min-h-11 rounded-2xl px-3 text-xs font-medium capitalize transition ring-1 ${
+                            newCategoryColor === color ? 'ring-2 ring-slate-100' : categoryPickerStyles[color]
+                          } ${newCategoryColor === color ? categoryPickerStyles[color] : ''}`}
                         >
                           {color}
                         </button>
@@ -784,9 +861,39 @@ export default function App() {
                 <input
                   type="datetime-local"
                   value={dueDateInput}
-                  onChange={(event) => setDueDateInput(event.target.value)}
+                  onChange={(event) => {
+                    const value = event.target.value
+                    setDueDateInput(value)
+                    if (!value) {
+                      setReminderEnabled(false)
+                    }
+                  }}
                   className="min-h-12 w-full rounded-2xl border border-slate-800 bg-slate-950 px-4 text-base text-slate-100 outline-none"
                 />
+                <button
+                  type="button"
+                  onClick={() => {
+                    void handleReminderToggle()
+                  }}
+                  disabled={!dueDateInput}
+                  className={`mt-3 flex min-h-12 w-full items-center justify-between rounded-2xl border px-4 text-sm font-medium transition ${
+                    reminderEnabled
+                      ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200'
+                      : 'border-slate-800 bg-slate-950 text-slate-300'
+                  } disabled:cursor-not-allowed disabled:opacity-50`}
+                >
+                  <span>Set reminder for this task</span>
+                  <span
+                    className={`inline-flex h-6 w-11 items-center rounded-full px-1 transition ${
+                      reminderEnabled ? 'bg-emerald-500/30 justify-end' : 'bg-slate-800 justify-start'
+                    }`}
+                  >
+                    <span className="h-4 w-4 rounded-full bg-white" />
+                  </span>
+                </button>
+                <p className="mt-2 text-xs text-slate-500">
+                  Add a due date first. Reminders work only while the app is open or installed.
+                </p>
               </div>
 
               <div>
