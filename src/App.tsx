@@ -633,10 +633,7 @@ export default function App() {
   return (
     <div className="mx-auto flex h-[100dvh] w-full max-w-md flex-col overflow-hidden bg-slate-950 text-slate-100">
       <header className="shrink-0 px-5 pb-4 pt-[calc(env(safe-area-inset-top)+1rem)]">
-        <p className="text-xs uppercase tracking-[0.28em] text-slate-500">Mobile Kanban</p>
-        <h1 className="mt-2 text-3xl font-semibold">Daily Flow</h1>
-        <p className="mt-2 text-sm leading-6 text-slate-400">One column at a time, built for fast mobile task management.</p>
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2">
           {notificationPermission === 'granted' ? (
             <span className="inline-flex min-h-10 items-center gap-2 rounded-full bg-emerald-500/15 px-4 text-sm font-medium text-emerald-300 ring-1 ring-emerald-500/20">
               <BellRing className="h-4 w-4" />
@@ -721,8 +718,8 @@ export default function App() {
 
       {isComposerOpen ? (
         <div className="absolute inset-0 z-50 flex items-end bg-black/60">
-          <div className="w-full rounded-t-[32px] border border-slate-800 bg-slate-900 p-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)]">
-            <div className="mb-5 flex items-center justify-between">
+          <div className="flex max-h-[88dvh] w-full flex-col rounded-t-[32px] border border-slate-800 bg-slate-900">
+            <div className="flex items-center justify-between px-5 pb-4 pt-5">
               <div>
                 <h3 className="text-xl font-semibold">{editingTask ? 'Edit Task' : 'Add Task'}</h3>
                 <p className="mt-1 text-sm text-slate-400">Simple and touch-friendly.</p>
@@ -736,7 +733,7 @@ export default function App() {
               </button>
             </div>
 
-            <div className="space-y-4">
+            <div className="flex-1 space-y-4 overflow-y-auto px-5 pb-4">
               <div>
                 <label className="mb-2 block text-sm font-medium text-slate-300">Title</label>
                 <input
@@ -884,8 +881,10 @@ export default function App() {
                   </div>
                 ) : null}
               </div>
+            </div>
 
-              <div className="flex gap-3 pt-2">
+            <div className="border-t border-slate-800 px-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] pt-4">
+              <div className="flex gap-3">
                 {editingTask ? (
                   <button
                     type="button"
