@@ -858,11 +858,6 @@ export default function App() {
                         <span className={`inline-flex min-h-7 items-center rounded-full px-2.5 text-xs ${categoryStyles[option.color]}`}>
                           {option.name}
                         </span>
-                        {categoryId === option.id ? (
-                          <span className="ml-auto inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-white/12 px-2 text-[11px] font-semibold text-white ring-1 ring-white/10">
-                            Selected
-                          </span>
-                        ) : null}
                       </button>
                       <button
                         type="button"
