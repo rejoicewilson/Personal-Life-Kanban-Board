@@ -44,3 +44,8 @@ export async function ensureSupabaseSession() {
 
   return data.session
 }
+
+export async function getSupabaseUserId() {
+  const session = await ensureSupabaseSession()
+  return session.user.id
+}

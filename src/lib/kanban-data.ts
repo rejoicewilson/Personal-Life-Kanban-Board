@@ -1,4 +1,4 @@
-import { defaultCategories, starterTasks, type Category, type CategoryColor, type Subtask, type Task, type TabKey } from '@/types/kanban'
+import { createSeedBoard, defaultCategories, type Category, type CategoryColor, type Subtask, type Task, type TabKey } from '@/types/kanban'
 import { ensureSupabaseSession, supabase } from '@/lib/supabase'
 
 type CategoryRow = {
@@ -66,24 +66,27 @@ function fromTask(task: Task) {
   }
 }
 
-async function seedBoard() {
+async function seedBoard(userId: string) {
   if (!supabase) {
     throw new Error('Supabase environment variables are missing.')
   }
 
-  const { error: categoryError } = await supabase.from('categories').upsert(defaultCategories.map(fromCategory))
+  const seedBoardData = createSeedBoard(userId)
+
+  const { error: categoryError } = await supabase.from('categories').upsert(seedBoardData.categories.map(fromCategory))
   if (categoryError) {
     throw categoryError
   }
 
-  const { error: taskError } = await supabase.from('tasks').upsert(starterTasks.map(fromTask))
+  const { error: taskError } = await supabase.from('tasks').upsert(seedBoardData.tasks.map(fromTask))
   if (taskError) {
     throw taskError
   }
 
   return {
-    categories: defaultCategories,
-    tasks: starterTasks,
+    userId,
+    categories: seedBoardData.categories,
+    tasks: seedBoardData.tasks,
   }
 }
 
@@ -92,7 +95,7 @@ export async function fetchBoardData() {
     throw new Error('Supabase environment variables are missing.')
   }
 
-  await ensureSupabaseSession()
+  const session = await ensureSupabaseSession()
 
   const [{ data: categoryRows, error: categoryError }, { data: taskRows, error: taskError }] = await Promise.all([
     supabase.from('categories').select('id, name, color').order('name', { ascending: true }),
@@ -111,10 +114,11 @@ export async function fetchBoardData() {
   const tasks = (taskRows ?? []).map(toTask)
 
   if (categories.length === 0 && tasks.length === 0) {
-    return seedBoard()
+    return seedBoard(session.user.id)
   }
 
   return {
+    userId: session.user.id,
     categories: categories.length > 0 ? categories : defaultCategories,
     tasks,
   }

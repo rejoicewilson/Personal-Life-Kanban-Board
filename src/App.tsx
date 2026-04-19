@@ -171,6 +171,7 @@ export default function App() {
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | 'unsupported'>(
     typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'unsupported',
   )
+  const [supabaseUserId, setSupabaseUserId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [syncError, setSyncError] = useState<string | null>(null)
 
@@ -196,6 +197,7 @@ export default function App() {
 
         setCategories(data.categories)
         setTasks(data.tasks)
+        setSupabaseUserId(data.userId)
         setCategoryId(data.categories[0]?.id ?? defaultCategories[0]?.id ?? 'personal')
         setSyncError(null)
       } catch (error) {
@@ -344,11 +346,11 @@ export default function App() {
 
   function createCategory() {
     const trimmedName = newCategoryName.trim()
-    if (!trimmedName) {
+    if (!trimmedName || !supabaseUserId) {
       return
     }
 
-    const baseId = slugifyCategoryName(trimmedName) || crypto.randomUUID()
+    const baseId = `${supabaseUserId}:${slugifyCategoryName(trimmedName) || crypto.randomUUID()}`
     const existingIds = new Set(categories.map((item) => item.id))
     let nextId = baseId
     let counter = 2
